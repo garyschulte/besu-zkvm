@@ -46,7 +46,7 @@ Artifact available via GHCR:
 ## Fetching Artifacts with ORAS
 
 Artifacts are stored as OCI images on `ghcr.io`.  
-They can be fetched and extracted locally with [`oras`](https://oras.land/). No authentication is required for these public images.
+They can be fetched and extracted locally with [`oras`](https://oras.land/). 
 
 ### Installing ORAS
 
@@ -54,12 +54,14 @@ On macOS (with Homebrew):
 
 ```bash
 brew install oras
+```
+
 On Linux (manual install or package managers, see oras.land).
 
 Pulling Artifacts
 ```bash
 # Example: fetch and extract the riscv64 GraalVM build
-oras pull ghcr.io/consensys/besu-zkvm-artifacts/graalvm-dev-java21-24.0.2-linux-riscv64:latest
+oras pull ghcr.io/consensys/besu-zkvm-artifacts:graalvm-dev-java21-24.0.2-linux-riscv64
 
 # Example: fetch the Debian riscv64 minbase image
 oras pull ghcr.io/consensys/besu-zkvm-artifacts:deb-minbase-riscv64
