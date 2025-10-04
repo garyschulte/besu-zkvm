@@ -62,7 +62,7 @@ static libraries to support graal.  Specifically static libs for:
 * libverify.a
 
 ### Building earlier versions of labs-openjdk-21, 22
-For reference, a workable recipe for building earlier labs-opendjdk build with static libs on debian-minbase riscv64:
+For reference, a workable recipe for building earlier labs-openjdk build with static libs on debian-minbase riscv64:
 ```bash
        bash configure \
             --with-debug-level=release \
@@ -81,7 +81,7 @@ For reference, a workable recipe for building earlier labs-opendjdk build with s
 
        # do a DIRTY static-jdk-image, 
        # TODO: copy the static-jdk-image makefile task from labs-openjdk HEAD into the build for 23.0.2
-       # copy static stuff into the jdk:
+       # copy static libs into the jdk:
         cp $STATIC_JDK_LIBS/server/libjvm.a $STATIC_JDK_PATH/lib/
         cp $STATIC_JDK_LIBS/libjava.a $STATIC_JDK_PATH/lib/
         cp $STATIC_JDK_LIBS/libverify.a $STATIC_JDK_PATH/lib/
@@ -95,7 +95,7 @@ a challenge.
 Riscv64 builds of labs-openjdk are scarce, and finding one that works with graal 24.0.2 is even rarer.
 
 However, the the last release build of [labs-openjdk-21](https://github.com/graalvm/labs-openjdk-21/releases/tag/jvmci-23.1-b33), it makes the build smoother. One 
-build issue map crop up regarding debug symbols. If during the build you encounter errors such as:
+build issue may crop up regarding debug symbols. If during the build you encounter errors such as:
 
 ```
 errors during build.
@@ -103,7 +103,7 @@ errors during build.
     ld.lld: error: /build/graal/truffle/mxbuild/linux-riscv64/libffi/libffi-build/.libs/libffi.a(prep_cif.o):(.debug_rnglists+0x17): unknown relocation (61) against symbol .Ltext0 ld.lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors) clang-16: error: linker command failed with exit code 1 (use -v to see invocation) ninja: build stopped: subcommand failed.
 ```
 
-The build process has generated Makefile with debug enabled and llvm is unable to parse the generated shared libs.  
+The build process has generated Makefile with debug symbols enabled and llvm is unable to parse the generated shared libs.  
 The build tool seems to ignore CFLAGS and CXXFLAGS, so it is most expedient to just remove debug symbols from the 
 build in the generated Makefile, replacing all of the -g switches with -g0: 
 
