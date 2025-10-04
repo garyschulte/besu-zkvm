@@ -9,6 +9,7 @@ All toolchains are Debian-based and produce **dynamically linked glibc artifacts
 ---
 
 ## Quick Start
+### On Linux
 Use the linux-amd64-gnu graal toolchain and riscv64 artifacts to build riscv64 native-images from linux amd64 java environment such as Ubuntu 24.04 or Debian Trixie.
 
 ```bash
@@ -26,7 +27,7 @@ You can then set your JAVA_HOME to the extracted graal directory, and specify na
 export GRAAL_PATH=/build
 export JAVA_HOME=$GRAAL_PATH/graalvm-dev-java21-24.0.2
 export PATH=$JAVA_HOME/bin:$PATH
-export NATIVE_IMAGE_OPTIONS=" -H:CompilerBackend=llvm -Dsvm.targetPlatformArch=mipsle -H:CAPCacheDir=$GRAAL_PATH/capcache \
+export NATIVE_IMAGE_OPTIONS=" -H:CompilerBackend=llvm -Dsvm.targetPlatformArch=riscv64 -H:CAPCacheDir=$GRAAL_PATH/capcache \
       -H:CCompilerPath=$GRAAL_PATH/riscv/bin/riscv64-unknown-linux-gnu-gcc \
       -H:CustomLD=$GRAAL_PATH/riscv/bin/riscv64-unknown-linux-gnu-ld \
       -H:CLibraryPath=$GRAAL_PATH/static-libraries \
@@ -39,7 +40,12 @@ javac HelloWorld.java
 native-image HelloWorld
 ```
 
-
+### On Macos
+This is largely the same as for the linux instructions except you will need darwin specific binaries:
+```bash
+oras pull ghcr.io/consensys/besu-zkvm-artifacts:graalvm-dev-java21-24.0.2-darwin-aarch64
+#a darwin aarch64 cross-gnu-toolchain is WIP.
+```
 
 ## Toolchains
 
