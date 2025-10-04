@@ -8,6 +8,39 @@ All toolchains are Debian-based and produce **dynamically linked glibc artifacts
 
 ---
 
+## Quick Start
+Use the linux-amd64-gnu graal toolchain and riscv64 artifacts to build riscv64 native-images from linux amd64 java environment.
+
+```bash
+oras pull ghcr.io/consensys/besu-zkvm-artifacts:graalvm-dev-java21-24.0.2-linux-riscv64
+oras pull ghcr.io/consensys/besu-zkvm-artifacts:linux-riscv64-gnu-capcache
+oras pull ghcr.io/consensys/besu-zkvm-artifacts:linux-riscv64-gnu-static-libraries
+curl -LO https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.07.16/riscv64-glibc-ubuntu-22.04-llvm-nightly-2025.07.16-nightly.tar.xz
+```
+
+Extract all of these to a build directory.  
+
+You can then set your JAVA_HOME to the extracted graal directory, and specify native-image options thusly:
+
+```bash
+export GRAAL_PATH=/build
+export JAVA_HOME=$GRAAL_PATH
+export PATH=$JAVA_HOME/bin:$PATH
+export NATIVE_IMAGE_OPTIONS=" -H:CompilerBackend=llvm -Dsvm.targetPlatformArch=mipsle -H:CAPCacheDir=$GRAAL_PATH/capcache \
+      -H:CCompilerPath=$GRAAL_PATH/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-gcc \
+      -H:CustomLD=$GRAAL_PATH/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-ld \
+      -H:CLibraryPath=$GRAAL_PATH/static-libraries \
+      --add-exports=jdk.internal.vm.ci/jdk.vm.ci.riscv64=org.graalvm.nativeimage.builder " 
+```
+
+Then you can use the graal jdk and native-image like so:
+```bash
+javac HelloWorld.java
+native-image HelloWorld
+```
+
+
+
 ## Toolchains
 
 ### 1. GraalVM for riscv64 (Cross & Native Builds)
