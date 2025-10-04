@@ -51,3 +51,67 @@ export GRAALVM_HOME=$(mx --dynamicimports /substratevm graalvm-home)
 Packaging and testing are manual on riscv, since the build suite does not work completely on riscv64.
 
 Similar steps taken for debian/gnu can and should be repeated for an Alpine/MUSL based system.  TBD.
+
+
+## Notes/errata on building Graal on Riscv
+
+building labs-openjdk-** for riscv can be challenging, especially since they need to built with 
+static libraries to support graal.  Specifically static libs for:
+* libjava.a 
+* libjvm.a 
+* libverify.a
+
+### Building earlier versions of labs-openjdk-21, 22
+For reference, a workable recipe for building earlier labs-opendjdk build with static libs on debian-minbase riscv64:
+```bash
+       bash configure \
+            --with-debug-level=release \
+            --disable-warnings-as-errors \
+            --with-native-debug-symbols=none \
+            --with-jvm-features=jvmci \
+            --with-jvm-variants=server
+
+
+       make jdk-image static-libs static-libs-image jmods
+       export STATIC_JDK_ROOT=/build/labs-openjdk-22/build/linux-riscv64-server-release
+       export STATIC_JDK_LIBS=$STATIC_JDK_ROOT/images/static-libs/lib/
+       export STATIC_JDK_PATH=$STATIC_JDK_ROOT/images/jdk
+       export JAVA_HOME=$STATIC_JDK_PATH
+
+
+       # do a DIRTY static-jdk-image, 
+       # TODO: copy the static-jdk-image makefile task from labs-openjdk HEAD into the build for 23.0.2
+       # copy static stuff into the jdk:
+        cp $STATIC_JDK_LIBS/server/libjvm.a $STATIC_JDK_PATH/lib/
+        cp $STATIC_JDK_LIBS/libjava.a $STATIC_JDK_PATH/lib/
+        cp $STATIC_JDK_LIBS/libverify.a $STATIC_JDK_PATH/lib/
+```
+
+More recent versions of labs-openjdk introduce a make target of static-jdk-image, which simplify the process
+but do not work with the versions of graal with a working llvm feature.  Finding the correct combination is 
+a challenge.  
+
+### Using pre-built release builds of labs-openjdk-**
+Riscv64 builds of labs-openjdk are scarce, and finding one that works with graal 24.0.2 is even rarer.
+
+However, the the last release build of [labs-openjdk-21](https://github.com/graalvm/labs-openjdk-21/releases/tag/jvmci-23.1-b33), it makes the build smoother. One 
+build issue map crop up regarding debug symbols. If during the build you encounter errors such as:
+
+```
+errors during build.
+  
+    ld.lld: error: /build/graal/truffle/mxbuild/linux-riscv64/libffi/libffi-build/.libs/libffi.a(prep_cif.o):(.debug_rnglists+0x17): unknown relocation (61) against symbol .Ltext0 ld.lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors) clang-16: error: linker command failed with exit code 1 (use -v to see invocation) ninja: build stopped: subcommand failed.
+```
+
+The build process has generated Makefile with debug enabled and llvm is unable to parse the generated shared libs.  
+The build tool seems to ignore CFLAGS and CXXFLAGS, so it is most expedient to just remove debug symbols from the 
+build in the generated Makefile, replacing all of the -g switches with -g0: 
+
+        /build/graal/truffle/mxbuild/linux-riscv64/libffi/libffi-build
+
+and re-reun make clean; make in the ffi folder.  Then restart the build and it will complete as usual
+ 
+
+
+
+
