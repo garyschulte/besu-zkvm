@@ -9,7 +9,7 @@ All toolchains are Debian-based and produce **dynamically linked glibc artifacts
 ---
 
 ## Quick Start
-Use the linux-amd64-gnu graal toolchain and riscv64 artifacts to build riscv64 native-images from linux amd64 java environment.
+Use the linux-amd64-gnu graal toolchain and riscv64 artifacts to build riscv64 native-images from linux amd64 java environment such as Ubuntu 24.04 or Debian Trixie.
 
 ```bash
 oras pull ghcr.io/consensys/besu-zkvm-artifacts:graalvm-dev-java21-24.0.2-linux-riscv64
