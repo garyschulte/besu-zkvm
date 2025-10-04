@@ -27,8 +27,8 @@ export GRAAL_PATH=/build
 export JAVA_HOME=$GRAAL_PATH/graalvm-dev-java21-24.0.2
 export PATH=$JAVA_HOME/bin:$PATH
 export NATIVE_IMAGE_OPTIONS=" -H:CompilerBackend=llvm -Dsvm.targetPlatformArch=mipsle -H:CAPCacheDir=$GRAAL_PATH/capcache \
-      -H:CCompilerPath=$GRAAL_PATH/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-gcc \
-      -H:CustomLD=$GRAAL_PATH/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-ld \
+      -H:CCompilerPath=$GRAAL_PATH/riscv/bin/riscv64-unknown-linux-gnu-gcc \
+      -H:CustomLD=$GRAAL_PATH/riscv/bin/riscv64-unknown-linux-gnu-ld \
       -H:CLibraryPath=$GRAAL_PATH/static-libraries \
       --add-exports=jdk.internal.vm.ci/jdk.vm.ci.riscv64=org.graalvm.nativeimage.builder " 
 ```
