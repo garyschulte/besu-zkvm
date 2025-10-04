@@ -179,8 +179,8 @@ javac HelloWorld.java
 $GRAALVM_HOME/bin/native-image HelloWorld -H:CompilerBackend=llvm \
   -Dsvm.targetPlatformArch=riscv64 \
   -H:CAPCacheDir=<path-to-artifacts>/capcache \
-  -H:CCompilerPath=<path-to-artifacts>/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-gcc \
-  -H:CustomLD=<path-to-artifacts>/riscv-toolchain-glibc2.33/riscv/bin/riscv64-unknown-linux-gnu-ld \
+  -H:CCompilerPath=<path-to-artifacts>/riscv/bin/riscv64-unknown-linux-gnu-gcc \
+  -H:CustomLD=<path-to-artifacts>/riscv/bin/riscv64-unknown-linux-gnu-ld \
   -H:CLibraryPath=<path-to-artifacts>/static-libraries \
   --add-exports=jdk.internal.vm.ci/jdk.vm.ci.riscv64=org.graalvm.nativeimage.builder
 ```
