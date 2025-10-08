@@ -1,0 +1,100 @@
+import groovy.transform.Memoized
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.10.3'
+    id 'com.github.ben-manes.versions' version '0.46.0'
+    id 'net.ltgt.errorprone' version '4.2.0'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'org.hyperledger.besu.riscv'
+version = calculateVersion()
+
+def besuVersion = '25.9.0'
+
+repositories {
+    mavenCentral()
+    maven {
+        url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
+        content { includeGroupByRegex('org\\.hyperledger\\..*') }
+    }
+    maven {
+        url = 'https://artifacts.consensys.net/public/maven/maven/'
+        content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
+    }}
+
+apply from: "${rootDir}/gradle/versions.gradle"
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
+}
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'genr1testcase'
+            mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
+            buildArgs.add('--verbose')
+            buildArgs.add('--no-fallback')
+            buildArgs.add('-H:+ReportExceptionStackTraces')
+            buildArgs.add('--enable-all-security-services')
+            buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
+            buildArgs.add('--trace-class-initialization=org.bouncycastle.jce.provider.BouncyCastleProvider')
+            buildArgs.add('-H:+AddAllCharsets')
+        }
+    }
+
+    toolchainDetection = true
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+@Memoized
+def calculateVersion() {
+    String version = System.getenv("TAG_VERSION") ?: '1.0-SNAPSHOT'
+    // Regex pattern for basic calendar versioning, with provision to omit patch rev
+    def versionPattern = ~/\d+\.\d+(\.\d+)?(-.*)?/
+    if (! (version =~ versionPattern)) {
+        println("Supplied project version is malformed: ${version}, aborting")
+        throw new GradleException("Supplied project version is malformed: ${version}")
+    }
+
+    if (version.endsWith("-SNAPSHOT")) {
+        version = version.replace("-SNAPSHOT", "-dev-" + getCheckedOutGitCommitHash())
+    }
+    return version
+}
+
+@Memoized
+def getCheckedOutGitCommitHash() {
+    def gitFolder = "${rootDir}/.git/"
+    if (!file(gitFolder).exists()) {
+        return "unknownCommit"
+    }
+
+    try {
+        def takeFromHash = 8
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-parse', 'HEAD'
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        return stdout.toString().trim().take(takeFromHash)
+    } catch (Exception e) {
+        return "unknownCommit"
+    }
+}
