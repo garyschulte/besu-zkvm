@@ -56,8 +56,16 @@ tasks.register('extractGnarkNativeLibs', Copy) {
     }
 }
 
-// Detect platform for library path
+// Detect platform for library path, with override for cross-compilation
 def detectPlatform() {
+    // Check for explicit override first (for cross-compilation)
+    def overrideArch = System.getenv('CROSS_COMPILE_ARCH')
+    if (overrideArch) {
+        println "Using cross-compile architecture override: ${overrideArch}"
+        return overrideArch
+    }
+
+    // Auto-detect based on current platform
     def osName = System.getProperty('os.name').toLowerCase()
     def osArch = System.getProperty('os.arch').toLowerCase()
 
@@ -108,6 +116,17 @@ graalvmNative {
             buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
+
+            // Honor NATIVE_IMAGE_OPTIONS environment variable, this might be used to specify using llvm backend or cross-compile options
+            def nativeImageOptions = System.getenv('NATIVE_IMAGE_OPTIONS')
+            if (nativeImageOptions) {
+                // Parse space-separated options and add them individually
+                nativeImageOptions.trim().split(/\s+/).each { option ->
+                    if (option && !option.isEmpty()) {
+                        buildArgs.add(option)
+                    }
+                }
+            }
         }
     }
 
