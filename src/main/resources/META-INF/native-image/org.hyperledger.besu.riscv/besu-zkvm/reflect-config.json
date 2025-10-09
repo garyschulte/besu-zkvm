@@ -20,6 +20,11 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "org.bouncycastle.jcajce.provider.asymmetric.ec.SignatureSpi$ecDSAnone",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "org.bouncycastle.jcajce.provider.asymmetric.EC$Mappings",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
