@@ -119,14 +119,25 @@ graalvmNative {
 
             // Honor NATIVE_IMAGE_OPTIONS environment variable, this might be used to specify using llvm backend or cross-compile options
             def nativeImageOptions = System.getenv('NATIVE_IMAGE_OPTIONS')
+            println "=========================================="
+            println "DEBUG: NATIVE_IMAGE_OPTIONS environment variable: '${nativeImageOptions}'"
             if (nativeImageOptions) {
+                println "DEBUG: Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
+                def parsedOptions = nativeImageOptions.trim().split(/\s+/)
+                println "DEBUG: Parsed options: ${parsedOptions}"
                 // Parse space-separated options and add them individually
-                nativeImageOptions.trim().split(/\s+/).each { option ->
+                parsedOptions.each { option ->
                     if (option && !option.isEmpty()) {
+                        println "DEBUG: Adding option: '${option}'"
                         buildArgs.add(option)
                     }
                 }
+            } else {
+                println "DEBUG: NATIVE_IMAGE_OPTIONS is not set or is empty"
             }
+            println "DEBUG: Final buildArgs list size: ${buildArgs.size()}"
+            println "DEBUG: All buildArgs: ${buildArgs}"
+            println "=========================================="
         }
     }
 
