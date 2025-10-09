@@ -1,0 +1,13 @@
+dependencyManagement {
+    imports {
+        mavenBom "org.hyperledger.besu:bom:25.9.0"
+        mavenBom "org.apache.logging.log4j:log4j-bom:2.24.3"
+    }
+}
+
+dependencies {
+    implementation 'io.consensys.tuweni:tuweni-bytes'
+    implementation 'io.consensys.tuweni:tuweni-units'
+    implementation 'org.bouncycastle:bcprov-jdk18on'
+    errorprone 'com.google.errorprone:error_prone_core:2.35.1'
+}
