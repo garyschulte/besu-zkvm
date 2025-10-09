@@ -49,7 +49,6 @@ graalvmNative {
             buildArgs.add('-H:+ReportExceptionStackTraces')
             buildArgs.add('--enable-all-security-services')
             buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
-            buildArgs.add('--trace-class-initialization=org.bouncycastle.jce.provider.BouncyCastleProvider')
             buildArgs.add('-H:+AddAllCharsets')
         }
     }
