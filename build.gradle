@@ -24,7 +24,17 @@ repositories {
         url = 'https://artifacts.consensys.net/public/maven/maven/'
         content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
     }
-    mavenLocal()
+    //mavenLocal()
+
+    // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
+    def garyschulteBesuNative =   ivy {
+        url = 'https://github.com'
+        patternLayout {
+            // Hard-code the GitHub repo path; use the Gradle module name as the artifact base
+            artifact '/garyschulte/besu-native/releases/download/v[revision]/[module]-[revision](-[classifier]).[ext]'
+        }
+        metadataSources { artifact() } // artifact-only, no pom/ivy
+    }
 }
 
 apply from: "${rootDir}/gradle/versions.gradle"

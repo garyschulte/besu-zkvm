@@ -9,7 +9,8 @@ dependencies {
     implementation 'io.consensys.tuweni:tuweni-bytes'
     implementation 'io.consensys.tuweni:tuweni-units'
     implementation 'org.bouncycastle:bcprov-jdk18on'
-    implementation 'org.hyperledger.besu:gnark:1.4.1-GRAAL'
+    implementation 'garyschulte:gnark:1.4.1-GRAAL@jar'
+    implementation 'garyschulte:gnark:1.4.1-GRAAL:static@jar'
     implementation 'org.graalvm.sdk:graal-sdk:24.0.2'
 
     // Static libraries for GraalVM native-image
