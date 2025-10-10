@@ -58,8 +58,8 @@ tasks.register('extractGnarkNativeLibs', Copy) {
 
 // Detect platform for library path, with override for cross-compilation
 def detectPlatform() {
-    // Check for explicit override first (for cross-compilation)
-    def overrideArch = System.getenv('CROSS_COMPILE_ARCH')
+    // Check for explicit override first (for cross-compilation via Gradle project property)
+    def overrideArch = project.findProperty('CROSS_COMPILE_ARCH')
     if (overrideArch) {
         println "Using cross-compile architecture override: ${overrideArch}"
         return overrideArch
@@ -117,26 +117,29 @@ graalvmNative {
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
 
-            // Honor NATIVE_IMAGE_OPTIONS environment variable, this might be used to specify using llvm backend or cross-compile options
-            def nativeImageOptions = System.getenv('NATIVE_IMAGE_OPTIONS')
+            // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
+            // This is used for cross-compilation with LLVM backend or other experimental options
+            def nativeImageOptions = project.findProperty('NATIVE_IMAGE_OPTIONS')
+
             println "=========================================="
-            println "DEBUG: NATIVE_IMAGE_OPTIONS environment variable: '${nativeImageOptions}'"
+            println "GraalVM Native Image Build Configuration"
+            println "Target platform: ${platform}"
+            println "CROSS_COMPILE_ARCH property: '${project.findProperty('CROSS_COMPILE_ARCH')}'"
+            println "NATIVE_IMAGE_OPTIONS property: '${nativeImageOptions}'"
+
             if (nativeImageOptions) {
-                println "DEBUG: Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
-                def parsedOptions = nativeImageOptions.trim().split(/\s+/)
-                println "DEBUG: Parsed options: ${parsedOptions}"
-                // Parse space-separated options and add them individually
+                println "Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
+                def parsedOptions = nativeImageOptions.toString().trim().split(/\s+/)
                 parsedOptions.each { option ->
                     if (option && !option.isEmpty()) {
-                        println "DEBUG: Adding option: '${option}'"
+                        println "  Adding: ${option}"
                         buildArgs.add(option)
                     }
                 }
             } else {
-                println "DEBUG: NATIVE_IMAGE_OPTIONS is not set or is empty"
+                println "NATIVE_IMAGE_OPTIONS not set (use -PNATIVE_IMAGE_OPTIONS=\"...\" to set)"
             }
-            println "DEBUG: Final buildArgs list size: ${buildArgs.size()}"
-            println "DEBUG: All buildArgs: ${buildArgs}"
+            println "Total buildArgs count: ${buildArgs.size()}"
             println "=========================================="
         }
     }
