@@ -38,8 +38,7 @@ java {
 }
 
 application {
-    //mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
-    mainClass = 'org.hyperledger.besu.riscv.poc.GraalG2PointTest'
+    mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 }
 
 // Task to extract native libraries from gnark static JAR
@@ -90,9 +89,8 @@ def detectPlatform() {
 graalvmNative {
     binaries {
         main {
-            //imageName = 'genr1testcase'
-            imageName = 'graalg2pointtest'
-            mainClass = 'org.hyperledger.besu.riscv.poc.GraalG2PointTest'
+            imageName = 'nativeImageTestRunner'
+            mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 
             // Use specific GraalVM installation
             javaLauncher = javaToolchains.launcherFor {
