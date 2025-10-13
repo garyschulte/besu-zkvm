@@ -1,5 +1,6 @@
 dependencyManagement {
     imports {
+        //mavenBom "org.hyperledger.besu:bom:{$besuVersion}"
         mavenBom "org.hyperledger.besu:bom:25.9.0"
         mavenBom "org.apache.logging.log4j:log4j-bom:2.24.3"
     }
@@ -11,12 +12,9 @@ dependencies {
     implementation 'org.bouncycastle:bcprov-jdk18on'
     implementation 'garyschulte:gnark:1.4.1-GRAAL@jar'
     implementation 'garyschulte:gnark:1.4.1-GRAAL:static@jar'
+    implementation 'garyschulte:secp256k1:1.4.1-GRAAL:static@jar'
     implementation 'org.graalvm.sdk:graal-sdk:24.0.2'
-
-    // Static libraries for GraalVM native-image
-    implementation('org.hyperledger.besu:gnark:1.4.1-GRAAL:static') {
-        transitive = false
-    }
+    implementation 'org.hyperledger.besu.internal:besu-crypto-services'
 
     errorprone 'com.google.errorprone:error_prone_core:2.35.1'
 }
