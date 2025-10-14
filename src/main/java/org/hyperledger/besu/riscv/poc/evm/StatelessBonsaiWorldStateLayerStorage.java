@@ -24,21 +24,15 @@ public class StatelessBonsaiWorldStateLayerStorage extends BonsaiWorldStateKeyVa
         super(provider, metricsSystem, dataStorageConfiguration);
     }
 
-    public StatelessBonsaiWorldStateLayerStorage(final BonsaiFlatDbStrategyProvider flatDbStrategyProvider, final SegmentedKeyValueStorage composedWorldStateStorage, final KeyValueStorage trieLogStorage) {
-        super(flatDbStrategyProvider, composedWorldStateStorage, trieLogStorage);
+    @Override
+    public Optional<Bytes> getAccountStateTrieNode(final Bytes location, final Bytes32 nodeHash) {
+        return getStateTrieNode(nodeHash);
     }
 
     @Override
-    public Optional<Bytes> getAccountStateTrieNode(Bytes location, Bytes32 nodeHash) {
-        return composedWorldStateStorage
-                .get(TRIE_BRANCH_STORAGE, nodeHash.toArrayUnsafe())
-                .map(Bytes::wrap);
+    public Optional<Bytes> getAccountStorageTrieNode(final Hash accountHash, final Bytes location, final Bytes32 nodeHash) {
+        return getStateTrieNode(nodeHash);
     }
 
-    @Override
-    public Optional<Bytes> getAccountStorageTrieNode(Hash accountHash, Bytes location, Bytes32 nodeHash) {
-        return composedWorldStateStorage
-                .get(TRIE_BRANCH_STORAGE, nodeHash.toArrayUnsafe())
-                .map(Bytes::wrap);
-    }
+
 }
