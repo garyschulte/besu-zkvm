@@ -103,11 +103,7 @@ graalvmNative {
             imageName = 'nativeImageTestRunner'
             mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 
-            // Use specific GraalVM installation
-            javaLauncher = javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(21)
-                vendor = JvmVendorSpec.GRAAL_VM
-            }
+            // Use JAVA_HOME environment variable (GraalVM installation)
 
             buildArgs.add('--verbose')
             buildArgs.add('--no-fallback')
@@ -125,7 +121,12 @@ graalvmNative {
             // Need to set this early so it's available during query code compilation
             buildArgs.add("-H:CCompilerOption=-I${nativeLibDir.absolutePath}")
 
+            // Also try adding as a system include path which might help with angle bracket includes
+            buildArgs.add("-H:CCompilerOption=-isystem")
+            buildArgs.add("-H:CCompilerOption=${nativeLibDir.absolutePath}")
+
             // Link against the static libraries
+            buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
