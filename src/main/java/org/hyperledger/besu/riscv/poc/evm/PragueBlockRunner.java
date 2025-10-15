@@ -13,6 +13,7 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
@@ -50,7 +51,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE;
 import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage.WORLD_BLOCK_HASH_KEY;
 import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage.WORLD_ROOT_HASH_KEY;
 
@@ -108,6 +108,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
             updater.putBlockHeader(blockHeader.getBlockHash(), blockHeader);
             updater.putBlockHash(blockHeader.getNumber(), blockHeader.getBlockHash());
             updater.setChainHead(blockHeader.getBlockHash());
+            updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.ZERO);
         });
         updater.commit();
 
@@ -133,15 +134,12 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
         final BonsaiWorldStateKeyValueStorage.Updater stateUpdater = bonsaiStorage.updater();
         trienodes.forEach((hash, value) -> {
             stateUpdater.getWorldStateTransaction().put(KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE,hash.toArray(),value.toArray());
-            if(hash.equals(Bytes.fromHexString("0x2377d7fd1caabb0de01b4b807aaee18c50b2c395f23aaa3ea8ad1a7133b7d715"))){
-                System.out.println("icici");
-            }
         });
         codes.forEach((hash, value) -> {
             stateUpdater.getWorldStateTransaction().put(KeyValueSegmentIdentifier.CODE_STORAGE, hash.toArrayUnsafe(),value.toArrayUnsafe());
         });
         final BlockHeader head = prevHeaders.get(prevHeaders.size() - 1);
-        stateUpdater.getWorldStateTransaction().put(KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE, WORLD_ROOT_HASH_KEY,head.getStateRoot().toArray());
+        stateUpdater. getWorldStateTransaction().put(KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE, WORLD_ROOT_HASH_KEY,head.getStateRoot().toArray());
         stateUpdater.getWorldStateTransaction().put(KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE, WORLD_BLOCK_HASH_KEY,head.getBlockHash().toArray());
         stateUpdater.commit();
 
@@ -156,7 +154,20 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                 new CodeCache()
         );
 
-
+        /*
+        curl --location 'http://127.0.0.1:8545' \
+        --data '{
+            "jsonrpc": "2.0",
+            "method": "debug_traceTransaction",
+            "params": [
+                "0xca36c1e529714639c25fc2ac9a3b13c4d0a3e81a74f451313ec2926c54cc48f3",
+                {
+                    "disableStorage": true
+                }
+            ],
+            "id": 1
+        }'
+         */
         var postMergeContext = new PostMergeContext();
 
         var protocolContext = new ProtocolContext.Builder()
@@ -199,7 +210,8 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
         );
 
         if (!result.isSuccessful()) {
-            System.out.println(result.errorMessage);
+            System.out.println("Block " + block.getHeader().getNumber()
+                    + " failed with error message "+ result.errorMessage);
             throw new RuntimeException("Block processing failed");
         }
 
@@ -209,9 +221,9 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
         System.out.println("  Transactions: " + block.getBody().getTransactions().size());
         System.out.println("  Receipts: " + result.getReceipts().size());
         System.out.println("  Gas used: " + block.getHeader().getGasUsed());
+        System.out.println("  Stateroot: " + result.getYield().get().getWorldState().rootHash());
     }
 
-    @SuppressWarnings("unused")
     private final static ExecutionWitnessJson EXECUTION_WITNESS;
     private final static Block BLOCK_TO_IMPORT;
     static {
@@ -231,11 +243,11 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                 EXECUTION_WITNESS = objectMapper.readValue(
                         Files.readString(Path.of(PragueBlockRunner.class.getResource("/state.json").toURI())),
                         ExecutionWitnessJson.class);
-
-                System.out.println("State: " + EXECUTION_WITNESS.getState().size());
-                System.out.println("Keys: " + EXECUTION_WITNESS.getKeys().size());
-                System.out.println("Codes: " + EXECUTION_WITNESS.getCodes().size());
-                System.out.println("Headers: " + EXECUTION_WITNESS.getHeaders().size());
+                System.out.println("✓ Loaded execution witness");
+                System.out.println("  State: " + EXECUTION_WITNESS.getState().size());
+                System.out.println("  Keys: " + EXECUTION_WITNESS.getKeys().size());
+                System.out.println("  Codes: " + EXECUTION_WITNESS.getCodes().size());
+                System.out.println("  Headers: " + EXECUTION_WITNESS.getHeaders().size());
 
                  /*
                     curl --location 'http://127.0.0.1:8545' --data '{
@@ -249,13 +261,13 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                  */
                 BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of(PragueBlockRunner.class.getResource("/block.rlp").toURI()))))
                         , new MainnetBlockHeaderFunctions());
+                System.out.println("✓ Loaded block to import "+BLOCK_TO_IMPORT.getHeader().getNumber());
             } catch (Exception e) {
                 throw new RuntimeException("Unable to load the state ", e);
             }
     }
     
-    public static void main(String[] args) {
-
+    public static void main(final String[] args) {
         final Map<Hash, Bytes> trieNodes = EXECUTION_WITNESS.getState().stream()
                 .map(Bytes::fromHexString)
                 .collect(Collectors.toMap(
