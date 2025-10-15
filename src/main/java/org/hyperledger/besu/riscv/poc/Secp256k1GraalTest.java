@@ -49,13 +49,14 @@ public class Secp256k1GraalTest {
         System.out.println("TEST 1: Key Generation");
         System.out.println("----------------------");
         KeyPair keyPair = secp256k1.generateKeyPair();
+
         System.out.println("Private key: " + keyPair.getPrivateKey().getEncodedBytes().toHexString());
         System.out.println("Public key:  " + keyPair.getPublicKey().getEncodedBytes().toHexString());
         System.out.println("Valid public key: " + secp256k1.isValidPublicKey(keyPair.getPublicKey()));
         System.out.println();
 
         // Test 2: Message Signing
-        System.out.println("TEST 2: Message Signing");
+        System.out.println("TEST 2: Message Signing (bouncycastle)");
         System.out.println("-----------------------");
         SecureRandom random = new SecureRandom();
         byte[] messageHash = new byte[32];
@@ -65,8 +66,11 @@ public class Secp256k1GraalTest {
         System.out.println("Message hash: " + dataHash.toHexString());
 
         SECPSignature signature = secp256k1.sign(dataHash, keyPair);
-        System.out.println("Signature R:  " + Bytes32.leftPad(Bytes.of(signature.getR().toByteArray())).toHexString());
-        System.out.println("Signature S:  " + Bytes32.leftPad(Bytes.of(signature.getS().toByteArray())).toHexString());
+        // BigInteger.toByteArray() may return 31, 32, or 33 bytes depending on the sign bit
+        Bytes rBytes = Bytes.of(signature.getR().toByteArray());
+        Bytes sBytes = Bytes.of(signature.getS().toByteArray());
+        System.out.println("Signature R:  " + Bytes32.leftPad(rBytes.size() > 32 ? rBytes.slice(1) : rBytes).toHexString());
+        System.out.println("Signature S:  " + Bytes32.leftPad(sBytes.size() > 32 ? sBytes.slice(1) : sBytes).toHexString());
         System.out.println("Recovery ID:  " + signature.getRecId());
         System.out.println();
 

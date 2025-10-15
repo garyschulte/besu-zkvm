@@ -24,7 +24,7 @@ repositories {
         url = 'https://artifacts.consensys.net/public/maven/maven/'
         content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
     }
-    //mavenLocal()
+    mavenLocal()
 
     // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
     def garyschulteBesuNative =   ivy {
@@ -164,6 +164,11 @@ graalvmNative {
 // Make nativeCompile depend on extracting the libraries
 tasks.named('nativeCompile') {
     dependsOn 'extractNativeLibs'
+}
+
+// Make build task include native image compilation
+tasks.named('build') {
+    dependsOn tasks.named('nativeCompile')
 }
 
 tasks.withType(JavaCompile) {
