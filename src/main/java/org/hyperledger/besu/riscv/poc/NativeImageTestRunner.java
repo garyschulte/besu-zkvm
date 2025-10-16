@@ -42,12 +42,17 @@ public class NativeImageTestRunner {
                     runBouncyCastleR1Test();
                     System.out.println();
                     runGnarkG2PointTest();
+                    System.out.println();
+                    runSecp256k1GraalTest();
                     break;
                 case "bouncycastler1":
                     runBouncyCastleR1Test();
                     break;
                 case "gnarkg2point":
                     runGnarkG2PointTest();
+                    break;
+                case "secp256k1graal":
+                    runSecp256k1GraalTest();
                     break;
                 default:
                     System.err.println("Unknown test: " + testName);
@@ -72,11 +77,13 @@ public class NativeImageTestRunner {
         System.out.println("  all              - Run all tests");
         System.out.println("  bouncyCastleR1   - Test BouncyCastle secp256r1 key generation and signing");
         System.out.println("  gnarkG2Point     - Test Gnark BLS12-381 G2 point validation");
+        System.out.println("  secp256k1Graal   - Test SECP256K1 with LibSecp256k1Graal native library");
         System.out.println();
         System.out.println("Examples:");
         System.out.println("  NativeImageTestRunner all");
         System.out.println("  NativeImageTestRunner bouncyCastleR1");
         System.out.println("  NativeImageTestRunner gnarkG2Point");
+        System.out.println("  NativeImageTestRunner secp256k1Graal");
     }
 
     /**
@@ -97,5 +104,15 @@ public class NativeImageTestRunner {
         System.out.println("Gnark BLS12-381 G2 Point Test");
         System.out.println("========================================");
         GnarkG2PointTest.runTest();
+    }
+
+    /**
+     * Runs the SECP256K1 Graal test.
+     */
+    private static void runSecp256k1GraalTest() throws Exception {
+        System.out.println("========================================");
+        System.out.println("SECP256K1 LibSecp256k1Graal Test");
+        System.out.println("========================================");
+        Secp256k1GraalTest.runTest();
     }
 }

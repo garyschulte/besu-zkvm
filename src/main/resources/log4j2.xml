@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="OFF" monitorInterval="30">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <!-- Minimal pattern - just message and newline -->
+            <PatternLayout pattern="%m%n" disableAnsi="true"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <!-- Set root level to OFF to disable all logging -->
+        <Root level="OFF">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

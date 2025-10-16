@@ -24,7 +24,7 @@ repositories {
         url = 'https://artifacts.consensys.net/public/maven/maven/'
         content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
     }
-    //mavenLocal()
+    mavenLocal()
 
     // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
     def garyschulteBesuNative =   ivy {
@@ -51,18 +51,19 @@ application {
     mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 }
 
-// Task to extract native libraries from gnark static JAR
-tasks.register('extractGnarkNativeLibs', Copy) {
-    def gnarkConfig = configurations.runtimeClasspath
-    def gnarkStaticJar = gnarkConfig.files.find { it.name.contains('gnark') && it.name.contains('static') }
+// Task to extract native libraries from static JARs
+tasks.register('extractNativeLibs', Copy) {
+    def config = configurations.runtimeClasspath
+    def staticJars = config.files.findAll { it.name.contains('-static.jar') }
 
-    if (gnarkStaticJar) {
-        from(zipTree(gnarkStaticJar)) {
+    staticJars.each { staticJar ->
+        println "Extracting native libraries from: ${staticJar.name}"
+        from(zipTree(staticJar)) {
             include 'lib/**/*.a'
             include 'lib/**/*.h'
         }
-        into layout.buildDirectory.dir('native-libs')
     }
+    into layout.buildDirectory.dir('native-libs')
 }
 
 // Detect platform for library path, with override for cross-compilation
@@ -102,11 +103,7 @@ graalvmNative {
             imageName = 'nativeImageTestRunner'
             mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 
-            // Use specific GraalVM installation
-            javaLauncher = javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(21)
-                vendor = JvmVendorSpec.GRAAL_VM
-            }
+            // Use JAVA_HOME environment variable (GraalVM installation)
 
             buildArgs.add('--verbose')
             buildArgs.add('--no-fallback')
@@ -120,7 +117,16 @@ graalvmNative {
             def nativeLibDir = layout.buildDirectory.dir("native-libs/lib/${platform}").get().asFile
             buildArgs.add("-H:CLibraryPath=${nativeLibDir.absolutePath}")
 
-            // Link against the gnark static libraries
+            // Add include path for header files
+            // Need to set this early so it's available during query code compilation
+            buildArgs.add("-H:CCompilerOption=-I${nativeLibDir.absolutePath}")
+
+            // Also try adding as a system include path which might help with angle bracket includes
+            buildArgs.add("-H:CCompilerOption=-isystem")
+            buildArgs.add("-H:CCompilerOption=${nativeLibDir.absolutePath}")
+
+            // Link against the static libraries
+            buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
             buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
@@ -157,7 +163,12 @@ graalvmNative {
 
 // Make nativeCompile depend on extracting the libraries
 tasks.named('nativeCompile') {
-    dependsOn 'extractGnarkNativeLibs'
+    dependsOn 'extractNativeLibs'
+}
+
+// Make build task include native image compilation
+tasks.named('build') {
+    dependsOn tasks.named('nativeCompile')
 }
 
 tasks.withType(JavaCompile) {
