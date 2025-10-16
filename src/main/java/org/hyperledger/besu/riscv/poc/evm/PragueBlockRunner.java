@@ -63,7 +63,7 @@ public class PragueBlockRunner {
 
 public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes) {
 
-        final GenesisConfig genesisConfig = GenesisConfig.fromSource(GenesisConfig.class.getResource("/hoodi.json"));
+        final GenesisConfig genesisConfig = GenesisConfig.fromSource(GenesisConfig.class.getResource("/mainnet.json"));
 
         final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
