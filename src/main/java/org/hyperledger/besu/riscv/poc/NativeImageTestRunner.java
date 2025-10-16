@@ -44,6 +44,8 @@ public class NativeImageTestRunner {
                     runGnarkG2PointTest();
                     System.out.println();
                     runSecp256k1GraalTest();
+                    System.out.println();
+                    runP256VerifyGraalTest();
                     break;
                 case "bouncycastler1":
                     runBouncyCastleR1Test();
@@ -53,6 +55,9 @@ public class NativeImageTestRunner {
                     break;
                 case "secp256k1graal":
                     runSecp256k1GraalTest();
+                    break;
+                case "p256verify":
+                    runP256VerifyGraalTest();
                     break;
                 default:
                     System.err.println("Unknown test: " + testName);
@@ -78,12 +83,14 @@ public class NativeImageTestRunner {
         System.out.println("  bouncyCastleR1   - Test BouncyCastle secp256r1 key generation and signing");
         System.out.println("  gnarkG2Point     - Test Gnark BLS12-381 G2 point validation");
         System.out.println("  secp256k1Graal   - Test SECP256K1 with LibSecp256k1Graal native library");
+        System.out.println("  p256Verify       - Test P-256 signature verification with BoringSSL");
         System.out.println();
         System.out.println("Examples:");
         System.out.println("  NativeImageTestRunner all");
         System.out.println("  NativeImageTestRunner bouncyCastleR1");
         System.out.println("  NativeImageTestRunner gnarkG2Point");
         System.out.println("  NativeImageTestRunner secp256k1Graal");
+        System.out.println("  NativeImageTestRunner p256Verify");
     }
 
     /**
@@ -114,5 +121,15 @@ public class NativeImageTestRunner {
         System.out.println("SECP256K1 LibSecp256k1Graal Test");
         System.out.println("========================================");
         Secp256k1GraalTest.runTest();
+    }
+
+    /**
+     * Runs the P-256 verify test.
+     */
+    private static void runP256VerifyGraalTest() throws Exception {
+        System.out.println("========================================");
+        System.out.println("P-256 Signature Verification Test");
+        System.out.println("========================================");
+        P256VerifyGraalTest.runTest();
     }
 }

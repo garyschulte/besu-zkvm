@@ -19,9 +19,9 @@ dependencies {
 
     // Use Logback as SLF4J implementation instead of Log4j2
     implementation 'ch.qos.logback:logback-classic:1.4.14'
-    implementation 'org.hyperledger.besu:gnark:1.4.1-GRAAL@jar'
     implementation 'org.hyperledger.besu:gnark:1.4.1-GRAAL:static@jar'
     implementation 'org.hyperledger.besu:secp256k1:1.4.1-GRAAL:static@jar'
+    implementation 'org.hyperledger.besu:boringssl:1.4.1-GRAAL:static@jar'
     implementation 'org.graalvm.sdk:graal-sdk:24.0.2'
     implementation 'org.hyperledger.besu.internal:besu-crypto-services'
 
