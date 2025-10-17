@@ -23,7 +23,14 @@ dependencies {
     implementation 'org.hyperledger.besu:secp256k1:1.4.1-GRAAL:static@jar'
     implementation 'org.hyperledger.besu:boringssl:1.4.1-GRAAL:static@jar'
     implementation 'org.graalvm.sdk:graal-sdk:24.0.2'
-    implementation 'org.hyperledger.besu.internal:besu-crypto-services'
+
+    // Exclude JNA-based native libraries from besu-crypto-services since they are not useful
+    // for GraalVM native compilation. We use the static variants instead.
+    implementation('org.hyperledger.besu.internal:besu-crypto-services') {
+        exclude group: 'org.hyperledger.besu', module: 'gnark'
+        exclude group: 'org.hyperledger.besu', module: 'secp256k1'
+        exclude group: 'org.hyperledger.besu', module: 'boringssl'
+    }
 
     errorprone 'com.google.errorprone:error_prone_core:2.35.1'
 }
