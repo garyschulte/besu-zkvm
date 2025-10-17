@@ -154,7 +154,6 @@ graalvmNative {
       buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
-      buildArgs.add("-H:NativeLinkerOption=-lcrypto")
       buildArgs.add("-H:NativeLinkerOption=-lboringssl_precompiles")
 
       // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
