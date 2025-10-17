@@ -15,6 +15,7 @@ version = calculateVersion()
 def besuVersion = '25.9.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven {
         url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'

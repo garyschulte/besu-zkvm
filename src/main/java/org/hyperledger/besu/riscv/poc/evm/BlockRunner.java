@@ -2,7 +2,6 @@ package org.hyperledger.besu.riscv.poc.evm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.consensus.merge.PostMergeContext;
 import org.hyperledger.besu.datatypes.Hash;
@@ -31,7 +30,6 @@ import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.cache.CodeCache;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.cache.NoopBonsaiCachedMerkleTrieLoader;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.storage.BonsaiWorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.trie.pathbased.common.provider.WorldStateQueryParams;
-import org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -40,12 +38,9 @@ import org.hyperledger.besu.plugin.services.BesuService;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 import org.hyperledger.besu.services.kvstore.SegmentedInMemoryKeyValueStorage;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,22 +49,24 @@ import java.util.stream.Collectors;
 import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage.WORLD_BLOCK_HASH_KEY;
 import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage.WORLD_ROOT_HASH_KEY;
 
-public class PragueBlockRunner {
+public class BlockRunner {
 
     private final ProtocolSchedule protocolSchedule;
     private final MutableBlockchain blockchain;
     private final org.hyperledger.besu.ethereum.trie.pathbased.bonsai.BonsaiWorldStateProvider worldStateArchive;
     private final ProtocolContext protocolContext;
 
-public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes) {
+public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes) {
 
         final GenesisConfig genesisConfig = GenesisConfig.fromSource(GenesisConfig.class.getResource("/mainnet.json"));
 
         final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
+        EvmConfiguration evmConfiguration = new EvmConfiguration(32_000L, EvmConfiguration.WorldUpdaterMode.JOURNALED);
+
         ProtocolSchedule protocolSchedule = MainnetProtocolSchedule.fromConfig(
                 genesisConfig.getConfigOptions(),
-                EvmConfiguration.DEFAULT,
+            evmConfiguration,
                 MiningConfiguration.MINING_DISABLED,
                 new BadBlockManager(),
                 false,
@@ -108,7 +105,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
             updater.putBlockHeader(blockHeader.getBlockHash(), blockHeader);
             updater.putBlockHash(blockHeader.getNumber(), blockHeader.getBlockHash());
             updater.setChainHead(blockHeader.getBlockHash());
-            updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.ZERO);
+            updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.fromHexString("0x3DC27172A9CF392563D"));
         });
         updater.commit();
 
@@ -149,7 +146,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                 Optional.empty(), // maxLayersToLoad
                 new NoopBonsaiCachedMerkleTrieLoader(),
                 serviceManager,
-                EvmConfiguration.DEFAULT,
+                evmConfiguration,
                 () -> (__, ___) -> {},
                 new CodeCache()
         );
@@ -178,10 +175,10 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                 .withServiceManager(serviceManager)
                 .build();
 
-        return new PragueBlockRunner(protocolSchedule,protocolContext, blockchain, worldStateArchive);
+        return new BlockRunner(protocolSchedule,protocolContext, blockchain, worldStateArchive);
     }
 
-    private PragueBlockRunner(
+    private BlockRunner(
             ProtocolSchedule protocolSchedule,
             ProtocolContext protocolContext,
             MutableBlockchain blockchain,
@@ -241,7 +238,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                     }'
                  */
                 EXECUTION_WITNESS = objectMapper.readValue(
-                        Files.readString(Path.of(PragueBlockRunner.class.getResource("/state.json").toURI())),
+                        Files.readString(Path.of(BlockRunner.class.getResource("/state.json").toURI())),
                         ExecutionWitnessJson.class);
                 System.out.println("✓ Loaded execution witness");
                 System.out.println("  State: " + EXECUTION_WITNESS.getState().size());
@@ -259,7 +256,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                         "id": 1
                     }'
                  */
-                BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of(PragueBlockRunner.class.getResource("/block.rlp").toURI()))))
+                BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of(BlockRunner.class.getResource("/block.rlp").toURI()))))
                         , new MainnetBlockHeaderFunctions());
                 System.out.println("✓ Loaded block to import "+BLOCK_TO_IMPORT.getHeader().getNumber());
             } catch (Exception e) {
@@ -268,6 +265,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
     }
     
     public static void main(final String[] args) {
+        System.out.println("Starting PragueBlockRunner ");
         final Map<Hash, Bytes> trieNodes = EXECUTION_WITNESS.getState().stream()
                 .map(Bytes::fromHexString)
                 .collect(Collectors.toMap(
@@ -287,7 +285,7 @@ public static PragueBlockRunner create(final List<BlockHeader> prevHeaders, fina
                 .sorted(Comparator.comparing(BlockHeader::getNumber))
                 .toList();
 
-        PragueBlockRunner runner = PragueBlockRunner.create(previousHeaders,trieNodes, codes);
+        BlockRunner runner = BlockRunner.create(previousHeaders,trieNodes, codes);
 
         runner.processBlock(BLOCK_TO_IMPORT);
     }
