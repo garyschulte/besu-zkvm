@@ -265,7 +265,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
     }
     
     public static void main(final String[] args) {
-        System.out.println("Starting PragueBlockRunner ");
+        System.out.println("Starting BlockRunner ");
         final Map<Hash, Bytes> trieNodes = EXECUTION_WITNESS.getState().stream()
                 .map(Bytes::fromHexString)
                 .collect(Collectors.toMap(
