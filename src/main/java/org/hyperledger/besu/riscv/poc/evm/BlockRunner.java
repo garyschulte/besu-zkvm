@@ -105,7 +105,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
             updater.putBlockHeader(blockHeader.getBlockHash(), blockHeader);
             updater.putBlockHash(blockHeader.getNumber(), blockHeader.getBlockHash());
             updater.setChainHead(blockHeader.getBlockHash());
-            updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.fromHexString("0x3DC27172A9CF392563D"));
+            updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.ZERO);
         });
         updater.commit();
 
