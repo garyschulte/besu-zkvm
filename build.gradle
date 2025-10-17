@@ -15,6 +15,7 @@ version = calculateVersion()
 def besuVersion = '25.9.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven {
         url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
@@ -99,6 +100,17 @@ def detectPlatform() {
     return 'x86-64' // default
 }
 
+dependencies {
+    implementation 'org.hyperledger.besu:besu-evm'
+    implementation 'org.hyperledger.besu.internal:besu-ethereum-core'
+    implementation 'org.hyperledger.besu.internal:besu-ethereum-rlp'
+    implementation 'org.hyperledger.besu.internal:besu-consensus-merge'
+    implementation 'org.hyperledger.besu.internal:besu-config'
+    implementation 'org.hyperledger.besu:besu-plugin-api'
+    implementation 'org.hyperledger.besu.internal:besu-metrics-core'
+    implementation 'org.hyperledger.besu.internal:besu-services-kvstore'
+}
+
 graalvmNative {
     binaries {
         main {
@@ -177,6 +189,7 @@ tasks.named('build') {
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
+
 
 @Memoized
 def calculateVersion() {
