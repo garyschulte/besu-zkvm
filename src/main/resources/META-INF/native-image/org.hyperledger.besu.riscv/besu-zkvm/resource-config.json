@@ -17,16 +17,16 @@
         "pattern": "\\Qblock.rlp\\E"
       },
       {
-        "pattern": "mainnet\\.json"
+        "pattern": "\\Qmainnet.json\\E"
       },
       {
-        "pattern": "sepolia\\.json"
+        "pattern": "\\Qsepolia.json\\E"
       },
       {
-        "pattern": "hoodi\\.json"
+        "pattern": "\\Qhoodi.json\\E"
       },
       {
-        "pattern": "holesky\\.json"
+        "pattern": "\\Qholesky.json\\E"
       }
     ]
   }

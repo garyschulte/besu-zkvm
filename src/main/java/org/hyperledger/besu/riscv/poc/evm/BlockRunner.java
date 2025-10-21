@@ -244,6 +244,8 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
         System.out.println("  --state=<path>    Path to state.json file");
         System.out.println("  --block=<path>    Path to block.rlp file");
         System.out.println("  --genesis=<path>  Path to genesis config file");
+        System.out.println("                    /mainnet.json, /sepolia.json, and /hoodi.json");
+        System.out.println("                    are bundled. ");
         System.out.println("  --help, -h, ?     Display this help message");
         System.out.println();
         System.out.println("Defaults:");
