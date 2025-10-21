@@ -52,7 +52,7 @@ java {
 }
 
 application {
-  mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+  mainClass = 'org.hyperledger.besu.riscv.poc.BlockRunner'
 }
 
 apply plugin: 'com.diffplug.spotless'
@@ -140,7 +140,7 @@ dependencies {
 graalvmNative {
     binaries {
         main {
-            imageName = 'nativeImageTestRunner'
+            imageName = 'blockRunner'
             // mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
             mainClass = 'org.hyperledger.besu.riscv.poc.evm.BlockRunner'
 

@@ -38,6 +38,10 @@ import org.hyperledger.besu.plugin.services.BesuService;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 import org.hyperledger.besu.services.kvstore.SegmentedInMemoryKeyValueStorage;
 
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -51,14 +55,21 @@ import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBa
 
 public class BlockRunner {
 
+    /**
+     * Record to hold command line arguments for file paths.
+     *
+     * @param stateJsonPath Optional path to state.json file
+     * @param blockRlpPath Optional path to block.rlp file
+     * @param genesisConfigURL Optional path to genesis config file
+     */
+    private record CommandLineArgs(Optional<String> stateJsonPath, Optional<String> blockRlpPath, Optional<URL> genesisConfigURL) {}
+
     private final ProtocolSchedule protocolSchedule;
     private final MutableBlockchain blockchain;
     private final org.hyperledger.besu.ethereum.trie.pathbased.bonsai.BonsaiWorldStateProvider worldStateArchive;
     private final ProtocolContext protocolContext;
 
-public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes) {
-
-        final GenesisConfig genesisConfig = GenesisConfig.fromSource(GenesisConfig.class.getResource("/mainnet.json"));
+public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes, final GenesisConfig genesisConfig) {
 
         final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
@@ -222,73 +233,160 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
         System.out.println("  Stateroot: " + result.getYield().get().getWorldState().rootHash());
     }
 
-    private final static ExecutionWitnessJson EXECUTION_WITNESS;
-    private final static Block BLOCK_TO_IMPORT;
-    static {
+    /**
+     * Print usage information and exit.
+     */
+    private static void printUsageAndExit() {
+        System.out.println("Usage: BlockRunner [OPTIONS]");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  --state=<path>    Path to state.json file");
+        System.out.println("  --block=<path>    Path to block.rlp file");
+        System.out.println("  --genesis=<path>  Path to genesis config file");
+        System.out.println("  --help, -h, ?     Display this help message");
+        System.out.println();
+        System.out.println("Defaults:");
+        System.out.println("  --state   : bundled /state.json resource");
+        System.out.println("  --block   : bundled /block.rlp resource");
+        System.out.println("  --genesis : bundled /mainnet.json resource");
+        System.exit(0);
+    }
+
+    /**
+     * Parse command line arguments for state, block, and genesis file paths.
+     *
+     * @param args command line arguments
+     * @return CommandLineArgs record with optional file paths
+     */
+    private static CommandLineArgs parseArguments(final String[] args) {
+        Optional<String> stateJsonPath = Optional.empty();
+        Optional<String> blockRlpPath = Optional.empty();
+        Optional<URL> genesisConfigURL = Optional.empty();
+
+        // Parse named arguments
+        for (String arg : args) {
+            if (arg.equals("--help") || arg.equals("-h") || arg.equals("?")) {
+                printUsageAndExit();
+            } else if (arg.startsWith("--state=")) {
+                stateJsonPath = Optional.of(arg.substring("--state=".length()));
+            } else if (arg.startsWith("--block=")) {
+                blockRlpPath = Optional.of(arg.substring("--block=".length()));
+            } else if (arg.startsWith("--genesis=")) {
+                var genesisConfigString = arg.substring("--genesis=".length());
+                try {
+                  genesisConfigURL = Optional.of(new URI(genesisConfigString).toURL());
+                } catch (URISyntaxException|MalformedURLException|IllegalArgumentException e) {
+                  System.err.println("Error loading genesis: " + genesisConfigString
+                      + "\n\t" + e.getMessage());
+                  printUsageAndExit();
+                }
+            } else {
+                System.err.println("Unknown argument: " + arg);
+                System.err.println("Use --help for usage information");
+                System.exit(1);
+            }
+        }
+
+        return new CommandLineArgs(stateJsonPath, blockRlpPath, genesisConfigURL);
+    }
+
+    /**
+     * Load file content from either filesystem path or classpath resource.
+     *
+     * @param filePath Optional filesystem path
+     * @param resourcePath classpath resource path (e.g., "/state.json")
+     * @return file content as string
+     */
+    private static String loadFileContent(final Optional<String> filePath, final String resourcePath) throws Exception {
+        if (filePath.isPresent()) {
+            // Load from filesystem
+            System.out.println("Loading from filesystem: " + filePath.get());
+            return Files.readString(Path.of(filePath.get()));
+        } else {
+            // Load from classpath resource
+            System.out.println("Loading from classpath: " + resourcePath);
+            var inputStream = BlockRunner.class.getResourceAsStream(resourcePath);
+            if (inputStream == null) {
+                throw new RuntimeException("Resource not found: " + resourcePath);
+            }
+            return new String(inputStream.readAllBytes());
+        }
+    }
+
+    public static void main(final String[] args) {
+        System.out.println("Starting BlockRunner");
+        CommandLineArgs cmdArgs = parseArguments(args);
+
+        try {
             ObjectMapper objectMapper = new ObjectMapper();
 
-            try {
-                /*
-                    curl --location 'http://127.0.0.1:8545' --data '{
-                        "jsonrpc": "2.0",
-                        "method": "debug_executionWitness",
-                        "params": [
-                            "0xE9E53"
-                        ],
-                        "id": 1
-                    }'
-                 */
-                EXECUTION_WITNESS = objectMapper.readValue(
-                                Files.readString(Path.of("/Users/garyschulte/dev/riscv/besu-zkvm/src/main/resources/state.json")),
-                        ExecutionWitnessJson.class);
-                System.out.println("✓ Loaded execution witness");
-                System.out.println("  State: " + EXECUTION_WITNESS.getState().size());
-                System.out.println("  Keys: " + EXECUTION_WITNESS.getKeys().size());
-                System.out.println("  Codes: " + EXECUTION_WITNESS.getCodes().size());
-                System.out.println("  Headers: " + EXECUTION_WITNESS.getHeaders().size());
+            // Load genesis config
+            GenesisConfig genesisConfig = cmdArgs.genesisConfigURL()
+                .map(GenesisConfig::fromConfig)
+                .orElse(GenesisConfig.mainnet());
+            System.out.println("✓ Loaded genesis config");
 
-                 /*
-                    curl --location 'http://127.0.0.1:8545' --data '{
-                        "jsonrpc": "2.0",
-                        "method": "debug_getRawBlock",
-                        "params": [
-                            "0xE9E53"
-                        ],
-                        "id": 1
-                    }'
-                 */
-                BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of("/Users/garyschulte/dev/riscv/besu-zkvm//src/main/resources/block.rlp"))))
-                        , new MainnetBlockHeaderFunctions());
-                System.out.println("✓ Loaded block to import "+BLOCK_TO_IMPORT.getHeader().getNumber());
-            } catch (Exception e) {
-                throw new RuntimeException("Unable to load the state ", e);
-            }
-    }
-    
-    public static void main(final String[] args) {
-        System.out.println("Starting BlockRunner ");
-        final Map<Hash, Bytes> trieNodes = EXECUTION_WITNESS.getState().stream()
-                .map(Bytes::fromHexString)
-                .collect(Collectors.toMap(
-                        Hash::hash,
-                        o -> o
-                ));
-        final Map<Hash, Bytes> codes = EXECUTION_WITNESS.getCodes().stream()
-                .map(Bytes::fromHexString)
-                .collect(Collectors.toMap(
-                        Hash::hash,
-                        o -> o
-                ));
+            /*
+                curl --location 'http://127.0.0.1:8545' --data '{
+                    "jsonrpc": "2.0",
+                    "method": "debug_executionWitness",
+                    "params": [
+                        "0xE9E53"
+                    ],
+                    "id": 1
+                }'
+             */
+            String stateJsonContent = loadFileContent(cmdArgs.stateJsonPath(), "/state.json");
+            ExecutionWitnessJson executionWitness = objectMapper.readValue(stateJsonContent, ExecutionWitnessJson.class);
+            System.out.println("✓ Loaded execution witness");
+            System.out.println("  State: " + executionWitness.getState().size());
+            System.out.println("  Keys: " + executionWitness.getKeys().size());
+            System.out.println("  Codes: " + executionWitness.getCodes().size());
+            System.out.println("  Headers: " + executionWitness.getHeaders().size());
 
-        final List<BlockHeader> previousHeaders = EXECUTION_WITNESS.getHeaders()
-                .stream()
-                .map(s -> BlockHeader.readFrom(RLP.input(Bytes.fromHexString(s)), new MainnetBlockHeaderFunctions()))
-                .sorted(Comparator.comparing(BlockHeader::getNumber))
-                .toList();
+             /*
+                curl --location 'http://127.0.0.1:8545' --data '{
+                    "jsonrpc": "2.0",
+                    "method": "debug_getRawBlock",
+                    "params": [
+                        "0xE9E53"
+                    ],
+                    "id": 1
+                }'
+             */
+            String blockRlpContent = loadFileContent(cmdArgs.blockRlpPath(), "/block.rlp");
+            Block blockToImport = Block.readFrom(
+                    RLP.input(Bytes.fromHexString(blockRlpContent.trim())),
+                    new MainnetBlockHeaderFunctions());
+            System.out.println("✓ Loaded block to import " + blockToImport.getHeader().getNumber());
 
-        BlockRunner runner = BlockRunner.create(previousHeaders,trieNodes, codes);
+            final Map<Hash, Bytes> trieNodes = executionWitness.getState().stream()
+                    .map(Bytes::fromHexString)
+                    .collect(Collectors.toMap(
+                            Hash::hash,
+                            o -> o
+                    ));
+            final Map<Hash, Bytes> codes = executionWitness.getCodes().stream()
+                    .map(Bytes::fromHexString)
+                    .collect(Collectors.toMap(
+                            Hash::hash,
+                            o -> o
+                    ));
 
-        runner.processBlock(BLOCK_TO_IMPORT);
+            final List<BlockHeader> previousHeaders = executionWitness.getHeaders()
+                    .stream()
+                    .map(s -> BlockHeader.readFrom(RLP.input(Bytes.fromHexString(s)), new MainnetBlockHeaderFunctions()))
+                    .sorted(Comparator.comparing(BlockHeader::getNumber))
+                    .toList();
+
+            BlockRunner runner = BlockRunner.create(previousHeaders, trieNodes, codes, genesisConfig);
+
+            runner.processBlock(blockToImport);
+        } catch (Exception e) {
+            System.err.println("Error loading or processing block: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 
 }
