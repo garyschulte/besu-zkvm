@@ -134,13 +134,15 @@ dependencies {
     implementation 'org.hyperledger.besu:besu-plugin-api'
     implementation 'org.hyperledger.besu.internal:besu-metrics-core'
     implementation 'org.hyperledger.besu.internal:besu-services-kvstore'
+    implementation 'org.hyperledger.besu.internal:besu-util'
 }
 
 graalvmNative {
-  binaries {
-    main {
-      imageName = 'nativeImageTestRunner'
-      mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+    binaries {
+        main {
+            imageName = 'nativeImageTestRunner'
+            // mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+            mainClass = 'org.hyperledger.besu.riscv.poc.evm.BlockRunner'
 
       // Use JAVA_HOME environment variable (GraalVM installation)
 
@@ -170,6 +172,12 @@ graalvmNative {
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
       buildArgs.add("-H:NativeLinkerOption=-lboringssl_precompiles")
+
+      // temporarily handle some troublesome static initializations:
+      buildArgs.add("--initialize-at-run-time=org.hyperledger.besu")
+      //buildArgs.add("-H:TraceClassInitialization=org.hyperledger.besu.util.BesuVersionUtils,org.hyperledger.besu.ethereum.core.MiningConfiguration")
+      buildArgs.add("-H:+ReportExceptionStackTraces")
+
 
       // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
       // This is used for cross-compilation with LLVM backend or other experimental options
