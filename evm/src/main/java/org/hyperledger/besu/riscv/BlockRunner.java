@@ -19,8 +19,6 @@ import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.consensus.merge.PostMergeContext;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
-import org.hyperledger.besu.ethereum.BlockValidator;
-import org.hyperledger.besu.ethereum.MainnetBlockValidatorBuilder;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.chain.BadBlockManager;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
@@ -70,19 +68,30 @@ public class BlockRunner {
   private final MutableBlockchain blockchain;
   private final ProtocolContext protocolContext;
 
+  /**
+   * Factory method that builds a complete in-memory Besu execution environment. It imports previous
+   * headers, reconstructs the world state from a witness, and returns a {@link BlockRunner} ready
+   * to process a block.
+   */
   public static BlockRunner create(
       final List<BlockHeader> prevHeaders,
-      final Map<Hash, Bytes> trienodes,
+      final Map<Hash, Bytes> trieNodes,
       final Map<Hash, Bytes> codes) {
 
+    // Load the standard mainnet genesis configuration.
     final GenesisConfig genesisConfig =
         GenesisConfig.fromSource(GenesisConfig.class.getResource("/mainnet.json"));
 
     final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
+    // Configure the EVM with in-memory (stacked) world updater mode.
     final EvmConfiguration evmConfiguration =
-        new EvmConfiguration(32_000L, EvmConfiguration.WorldUpdaterMode.STACKED, true);
+        new EvmConfiguration(
+            EvmConfiguration.DEFAULT.jumpDestCacheWeightKB(),
+            EvmConfiguration.WorldUpdaterMode.STACKED,
+            true);
 
+    // Build the mainnet protocol schedule based on the genesis config.
     final ProtocolSchedule protocolSchedule =
         MainnetProtocolSchedule.fromConfig(
             genesisConfig.getConfigOptions(),
@@ -93,16 +102,18 @@ public class BlockRunner {
             false,
             noOpMetricsSystem);
 
-    // Genesis State
+    // Construct the genesis state and world state root.
     final GenesisState genesisState =
         GenesisState.fromConfig(genesisConfig, protocolSchedule, new CodeCache());
 
+    // Create an in-memory key-value storage provider.
     final StorageProvider storageProvider =
         new KeyValueStorageProvider(
             segments -> new SegmentedInMemoryKeyValueStorage(),
             new InMemoryKeyValueStorage(),
             noOpMetricsSystem);
 
+    // Blockchain storage setup (headers, blocks, variables).
     final var variablesStorage =
         new VariablesKeyValueStorage(
             storageProvider.getStorageBySegmentIdentifier(KeyValueSegmentIdentifier.VARIABLES));
@@ -117,23 +128,19 @@ public class BlockRunner {
         DefaultBlockchain.createMutable(
             genesisState.getBlock(), blockchainStorage, noOpMetricsSystem, 0);
 
+    // Import all previous headers into the blockchain storage and set the chain head.
     final KeyValueStoragePrefixedKeyBlockchainStorage.Updater updater = blockchainStorage.updater();
-    prevHeaders.forEach(
-        blockHeader -> {
-          updater.putBlockHeader(blockHeader.getBlockHash(), blockHeader);
-          updater.putBlockHash(blockHeader.getNumber(), blockHeader.getBlockHash());
-          updater.setChainHead(blockHeader.getBlockHash());
-          updater.putTotalDifficulty(blockHeader.getBlockHash(), Difficulty.ZERO);
-        });
+    final BlockHeader head = importHeadersAndSetHead(prevHeaders, updater);
     updater.commit();
 
-    // WorldState
+    // Prepare a Bonsai world state layer using stateless storage (no persistence).
     var bonsaiStorage =
         new StatelessBonsaiWorldStateLayerStorage(
             storageProvider,
             noOpMetricsSystem,
             DataStorageConfiguration.DEFAULT_BONSAI_PARTIAL_DB_CONFIG);
 
+    // Dummy ServiceManager since no external services are used here.
     final ServiceManager serviceManager =
         new ServiceManager() {
           @Override
@@ -147,8 +154,9 @@ public class BlockRunner {
           }
         };
 
+    // Populate trie nodes and contract code into the world state.
     final BonsaiWorldStateKeyValueStorage.Updater stateUpdater = bonsaiStorage.updater();
-    trienodes.forEach(
+    trieNodes.forEach(
         (hash, value) -> {
           stateUpdater
               .getWorldStateTransaction()
@@ -163,8 +171,6 @@ public class BlockRunner {
                   hash.toArrayUnsafe(),
                   value.toArrayUnsafe());
         });
-
-    final BlockHeader head = prevHeaders.get(prevHeaders.size() - 1);
     stateUpdater
         .getWorldStateTransaction()
         .put(
@@ -179,6 +185,7 @@ public class BlockRunner {
             head.getBlockHash().toArray());
     stateUpdater.commit();
 
+    // Create a world state provider using Bonsai implementation.
     final var worldStateArchive =
         new BonsaiWorldStateProvider(
             bonsaiStorage,
@@ -204,8 +211,9 @@ public class BlockRunner {
         "id": 1
     }'
      */
-    final var postMergeContext = new PostMergeContext();
 
+    // Build a lightweight ProtocolContext used to execute blocks.
+    final var postMergeContext = new PostMergeContext();
     final var protocolContext =
         new ProtocolContext.Builder()
             .withBlockchain(blockchain)
@@ -218,6 +226,41 @@ public class BlockRunner {
     return new BlockRunner(protocolSchedule, protocolContext, blockchain);
   }
 
+  /**
+   * Imports a list of ordered block headers into blockchain storage, validates parent linkage, sets
+   * the chain head to the last header, and returns it.
+   */
+  private static BlockHeader importHeadersAndSetHead(
+      final List<BlockHeader> headers,
+      final KeyValueStoragePrefixedKeyBlockchainStorage.Updater updater) {
+    if (headers == null || headers.isEmpty()) {
+      throw new IllegalArgumentException("Header list cannot be null or empty");
+    }
+    BlockHeader previous = headers.getFirst();
+    Hash previousHash = previous.getHash();
+    // Store the first header
+    updater.putBlockHeader(previousHash, previous);
+    updater.putBlockHash(previous.getNumber(), previousHash);
+    // Process the rest of the chain and verify parent linkage.
+    for (int i = 1; i < headers.size(); i++) {
+      final BlockHeader current = headers.get(i);
+      if (!current.getParentHash().equals(previousHash)) {
+        throw new IllegalStateException(
+            String.format(
+                "Invalid block header chain at index %d: expected parent %s, got %s",
+                i, previousHash, current.getParentHash()));
+      }
+      previous = current;
+      previousHash = current.getHash();
+      updater.putBlockHeader(previousHash, previous);
+      updater.putBlockHash(previous.getNumber(), previousHash);
+    }
+    // Set the final header as the chain head and initialize total difficulty.
+    updater.setChainHead(previousHash);
+    updater.putTotalDifficulty(previousHash, Difficulty.ZERO);
+    return previous;
+  }
+
   private BlockRunner(
       ProtocolSchedule protocolSchedule,
       ProtocolContext protocolContext,
@@ -227,24 +270,36 @@ public class BlockRunner {
     this.blockchain = blockchain;
   }
 
+  /**
+   * Validates and executes a single block against the reconstructed blockchain and world state.
+   *
+   * <p>Workflow: 1) Lookup the ProtocolSpec for the block header (selects the correct
+   * rules/processor). 2) Run validateAndProcessBlock(): - validates the header (FULL) and body
+   * (NONE for ommers here), - executes all transactions against the current world state, -
+   * generates receipts and computes the resulting state root, - verifies that the computed state
+   * root matches the header’s stateRoot. 3) If successful, append the block and receipts to the
+   * in-memory blockchain. 4) If validation fails, print the error and throw.
+   *
+   * <p>Notes: - result.getYield() is optional; use orElseThrow() to make failures explicit when
+   * printing. - Consider replacing System.out with a logger for real usage.
+   *
+   * @param block the block to validate and execute
+   * @throws RuntimeException if validation or execution fails
+   */
   public void processBlock(final Block block) {
 
     final ProtocolSpec protocolSpec = protocolSchedule.getByBlockHeader(block.getHeader());
 
-    final BlockValidator blockValidator =
-        MainnetBlockValidatorBuilder.frontier(
-            protocolSpec.getBlockHeaderValidator(),
-            protocolSpec.getBlockBodyValidator(),
-            protocolSpec.getBlockProcessor());
-
     final BlockProcessingResult result =
-        blockValidator.validateAndProcessBlock(
-            protocolContext,
-            block,
-            HeaderValidationMode.FULL,
-            HeaderValidationMode.NONE,
-            true,
-            false);
+        protocolSpec
+            .getBlockValidator()
+            .validateAndProcessBlock(
+                protocolContext,
+                block,
+                HeaderValidationMode.FULL,
+                HeaderValidationMode.NONE,
+                true,
+                false);
 
     if (!result.isSuccessful()) {
       System.out.println(
