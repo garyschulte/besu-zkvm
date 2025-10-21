@@ -18,6 +18,15 @@
       },
       {
         "pattern": "\\Qmainnet.json\\E"
+      },
+      {
+        "pattern": "\\Qsepolia.json\\E"
+      },
+      {
+        "pattern": "\\Qhoodi.json\\E"
+      },
+      {
+        "pattern": "\\Qholesky.json\\E"
       }
     ]
   }
