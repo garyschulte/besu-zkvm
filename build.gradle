@@ -63,6 +63,9 @@ tasks.register('extractNativeLibs', Copy) {
         from(zipTree(staticJar)) {
             include 'lib/**/*.a'
             include 'lib/**/*.h'
+            eachFile { fileCopyDetails ->
+                println "  Extracting: ${fileCopyDetails.relativePath}"
+            }
         }
     }
     into layout.buildDirectory.dir('native-libs')
