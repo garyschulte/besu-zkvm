@@ -60,17 +60,18 @@ public class BlockRunner {
      *
      * @param stateJsonPath Optional path to state.json file
      * @param blockRlpPath Optional path to block.rlp file
-     * @param genesisConfigURL Optional path to genesis config file
+     * @param genesisConfigPath Optional path to genesis config file
      */
-    private record CommandLineArgs(Optional<String> stateJsonPath, Optional<String> blockRlpPath, Optional<URL> genesisConfigURL) {}
+    private record CommandLineArgs(Optional<String> stateJsonPath, Optional<String> blockRlpPath, Optional<String> genesisConfigPath) {}
 
     private final ProtocolSchedule protocolSchedule;
     private final MutableBlockchain blockchain;
     private final org.hyperledger.besu.ethereum.trie.pathbased.bonsai.BonsaiWorldStateProvider worldStateArchive;
     private final ProtocolContext protocolContext;
 
-public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes, final GenesisConfig genesisConfig) {
+public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<Hash,Bytes> trienodes, final Map<Hash,Bytes> codes, final String genesisConfigJson) {
 
+        final GenesisConfig genesisConfig = GenesisConfig.fromConfig(genesisConfigJson);
         final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
         EvmConfiguration evmConfiguration = new EvmConfiguration(32_000L, EvmConfiguration.WorldUpdaterMode.JOURNALED, false);
@@ -261,7 +262,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
     private static CommandLineArgs parseArguments(final String[] args) {
         Optional<String> stateJsonPath = Optional.empty();
         Optional<String> blockRlpPath = Optional.empty();
-        Optional<URL> genesisConfigURL = Optional.empty();
+        Optional<String> genesisConfigPath = Optional.empty();
 
         // Parse named arguments
         for (String arg : args) {
@@ -272,14 +273,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
             } else if (arg.startsWith("--block=")) {
                 blockRlpPath = Optional.of(arg.substring("--block=".length()));
             } else if (arg.startsWith("--genesis=")) {
-                var genesisConfigString = arg.substring("--genesis=".length());
-                try {
-                  genesisConfigURL = Optional.of(new URI(genesisConfigString).toURL());
-                } catch (URISyntaxException|MalformedURLException|IllegalArgumentException e) {
-                  System.err.println("Error loading genesis: " + genesisConfigString
-                      + "\n\t" + e.getMessage());
-                  printUsageAndExit();
-                }
+                genesisConfigPath = Optional.of(arg.substring("--genesis=".length()));
             } else {
                 System.err.println("Unknown argument: " + arg);
                 System.err.println("Use --help for usage information");
@@ -287,30 +281,30 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
             }
         }
 
-        return new CommandLineArgs(stateJsonPath, blockRlpPath, genesisConfigURL);
+        return new CommandLineArgs(stateJsonPath, blockRlpPath, genesisConfigPath);
     }
 
     /**
-     * Load file content from either filesystem path or classpath resource.
+     * Load file content from either classpath resource or filesystem path.
+     * Tries classpath resource first, then falls back to filesystem if not found.
      *
-     * @param filePath Optional filesystem path
-     * @param resourcePath classpath resource path (e.g., "/state.json")
+     * @param filePath Optional filesystem path or resource path
+     * @param defaultResourcePath default classpath resource path (e.g., "/state.json")
      * @return file content as string
      */
-    private static String loadFileContent(final Optional<String> filePath, final String resourcePath) throws Exception {
-        if (filePath.isPresent()) {
-            // Load from filesystem
-            System.out.println("Loading from filesystem: " + filePath.get());
-            return Files.readString(Path.of(filePath.get()));
-        } else {
-            // Load from classpath resource
-            System.out.println("Loading from classpath: " + resourcePath);
-            var inputStream = BlockRunner.class.getResourceAsStream(resourcePath);
-            if (inputStream == null) {
-                throw new RuntimeException("Resource not found: " + resourcePath);
-            }
+    private static String loadFileContent(final Optional<String> filePath, final String defaultResourcePath) throws Exception {
+        String path = filePath.orElse(defaultResourcePath);
+
+        // Try loading from classpath resource first
+        var inputStream = BlockRunner.class.getResourceAsStream(path);
+        if (inputStream != null) {
+            System.out.println("Loading from classpath: " + path);
             return new String(inputStream.readAllBytes());
         }
+
+        // Fall back to filesystem
+        System.out.println("Loading from filesystem: " + path);
+        return Files.readString(Path.of(path));
     }
 
     public static void main(final String[] args) {
@@ -321,9 +315,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
             ObjectMapper objectMapper = new ObjectMapper();
 
             // Load genesis config
-            GenesisConfig genesisConfig = cmdArgs.genesisConfigURL()
-                .map(GenesisConfig::fromConfig)
-                .orElse(GenesisConfig.mainnet());
+            String genesisConfigJson = loadFileContent(cmdArgs.genesisConfigPath(), "/mainnet.json");
             System.out.println("✓ Loaded genesis config");
 
             /*
@@ -379,7 +371,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
                     .sorted(Comparator.comparing(BlockHeader::getNumber))
                     .toList();
 
-            BlockRunner runner = BlockRunner.create(previousHeaders, trieNodes, codes, genesisConfig);
+            BlockRunner runner = BlockRunner.create(previousHeaders, trieNodes, codes, genesisConfigJson);
 
             runner.processBlock(blockToImport);
         } catch (Exception e) {
