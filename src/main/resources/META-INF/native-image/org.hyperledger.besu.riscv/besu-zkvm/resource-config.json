@@ -9,6 +9,15 @@
       },
       {
         "pattern": "\\Qlogback.xml\\E"
+      },
+      {
+        "pattern": "\\Qstate.json\\E"
+      },
+      {
+        "pattern": "\\Qblock.rlp\\E"
+      },
+      {
+        "pattern": "\\Qmainnet.json\\E"
       }
     ]
   }

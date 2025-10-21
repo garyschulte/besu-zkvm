@@ -50,7 +50,7 @@ java {
 }
 
 application {
-    mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+    mainClass = 'org.hyperledger.besu.riscv.poc.BlockRunner'
 }
 
 // Task to extract native libraries from static JARs
@@ -115,7 +115,7 @@ dependencies {
 graalvmNative {
     binaries {
         main {
-            imageName = 'nativeImageTestRunner'
+            imageName = 'blockRunner'
             // mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
             mainClass = 'org.hyperledger.besu.riscv.poc.evm.BlockRunner'
 
