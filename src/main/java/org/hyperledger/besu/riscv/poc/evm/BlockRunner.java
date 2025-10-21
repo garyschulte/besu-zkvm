@@ -62,11 +62,12 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
 
         final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
 
-        EvmConfiguration evmConfiguration = new EvmConfiguration(32_000L, EvmConfiguration.WorldUpdaterMode.JOURNALED);
+        EvmConfiguration evmConfiguration = new EvmConfiguration(32_000L, EvmConfiguration.WorldUpdaterMode.JOURNALED, false);
 
         ProtocolSchedule protocolSchedule = MainnetProtocolSchedule.fromConfig(
                 genesisConfig.getConfigOptions(),
             evmConfiguration,
+                // use workaround miningConfiguration until upstream besu version meta is fixed
                 MiningConfiguration.MINING_DISABLED,
                 new BadBlockManager(),
                 false,
@@ -238,7 +239,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
                     }'
                  */
                 EXECUTION_WITNESS = objectMapper.readValue(
-                        Files.readString(Path.of(BlockRunner.class.getResource("/state.json").toURI())),
+                                Files.readString(Path.of("/Users/garyschulte/dev/riscv/besu-zkvm/src/main/resources/state.json")),
                         ExecutionWitnessJson.class);
                 System.out.println("✓ Loaded execution witness");
                 System.out.println("  State: " + EXECUTION_WITNESS.getState().size());
@@ -256,7 +257,7 @@ public static BlockRunner create(final List<BlockHeader> prevHeaders, final Map<
                         "id": 1
                     }'
                  */
-                BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of(BlockRunner.class.getResource("/block.rlp").toURI()))))
+                BLOCK_TO_IMPORT = Block.readFrom(RLP.input(Bytes.fromHexString(Files.readString(Path.of("/Users/garyschulte/dev/riscv/besu-zkvm//src/main/resources/block.rlp"))))
                         , new MainnetBlockHeaderFunctions());
                 System.out.println("✓ Loaded block to import "+BLOCK_TO_IMPORT.getHeader().getNumber());
             } catch (Exception e) {
