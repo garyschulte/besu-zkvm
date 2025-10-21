@@ -6,6 +6,9 @@
       },
       {
         "pattern": "\\Qorg/bouncycastle/\\E.*"
+      },
+      {
+        "pattern": "\\Qlogback.xml\\E"
       }
     ]
   }

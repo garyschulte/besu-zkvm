@@ -1,141 +1,103 @@
 import groovy.transform.Memoized
 
 plugins {
-  id 'java'
-  id 'application'
-  id 'org.graalvm.buildtools.native' version '0.10.3'
-  id 'com.github.ben-manes.versions' version '0.46.0'
-  id 'net.ltgt.errorprone' version '4.2.0'
-  id 'io.spring.dependency-management' version '1.1.6'
-  id 'com.diffplug.spotless' version '8.0.0'
-}
-
-apply plugin: 'com.diffplug.spotless'
-spotless {
-  java {
-    // This path needs to be relative to each project
-    target 'src/**/*.java'
-    targetExclude '**/src/reference-test/**', '**/src/main/generated/**', '**/src/test/generated/**', '**/src/jmh/generated/**'
-    removeUnusedImports()
-    googleJavaFormat('1.17.0')
-    importOrder 'org.hyperledger', 'java', ''
-    trimTrailingWhitespace()
-    endWithNewline()
-    licenseHeaderFile "${rootDir}/gradle/spotless.java.license"
-  }
-  groovyGradle {
-    target '*.gradle'
-    greclipse('4.30.0').configFile(rootProject.file('gradle/formatter.properties'))
-    endWithNewline()
-  }
-  // Below this line are currently only license header tasks
-  format 'groovy', { target '**/src/*/grovy/**/*.groovy' }
-  format 'bash', { target '**/*.sh' }
-  format 'sol', { target '**/*.sol' }
+    id 'java'
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.10.3'
+    id 'com.github.ben-manes.versions' version '0.46.0'
+    id 'net.ltgt.errorprone' version '4.2.0'
+    id 'io.spring.dependency-management' version '1.1.6'
+    id 'com.diffplug.spotless' version '8.0.0'
 }
 
 
-group = 'org.hyperledger.besu.riscv'
-version = calculateVersion()
+allprojects {
 
-def besuVersion = '25.9.0'
+    apply plugin: 'java-library'
+    apply plugin: 'maven-publish'
+    apply plugin: 'net.ltgt.errorprone'
+    apply plugin: 'com.diffplug.spotless'
+    apply from: "${rootDir}/gradle/versions.gradle"
 
-repositories {
-  mavenLocal()
-  mavenCentral()
-  maven {
-    url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
-    content { includeGroupByRegex('org\\.hyperledger\\..*') }
-  }
-  maven {
-    url = 'https://artifacts.consensys.net/public/maven/maven/'
-    content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
-  }
+    repositories {
+        mavenCentral()
+        maven {
+            url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
+            content { includeGroupByRegex('org\\.hyperledger\\..*') }
+        }
+        maven {
+            url = 'https://artifacts.consensys.net/public/maven/maven/'
+            content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
+        }
+    }
+
+    spotless {
+        java {
+            // This path needs to be relative to each project
+            target 'src/**/*.java'
+            targetExclude '**/src/reference-test/**', '**/src/main/generated/**', '**/src/test/generated/**', '**/src/jmh/generated/**'
+            removeUnusedImports()
+            googleJavaFormat('1.17.0')
+            importOrder 'org.hyperledger', 'java', ''
+            trimTrailingWhitespace()
+            endWithNewline()
+            licenseHeaderFile "${rootDir}/gradle/spotless.java.license"
+        }
+        groovyGradle {
+            target '*.gradle'
+            greclipse('4.30.0').configFile(rootProject.file('gradle/formatter.properties'))
+            endWithNewline()
+        }
+        // Below this line are currently only license header tasks
+        format 'groovy', { target '**/src/*/grovy/**/*.groovy' }
+        format 'bash', { target '**/*.sh' }
+        format 'sol', { target '**/*.sol' }
+    }
 }
 
-apply from: "${rootDir}/gradle/versions.gradle"
 
 java {
-  withSourcesJar()
-  withJavadocJar()
-  toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
-  }
-}
-
-application {
-  mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
-}
-
-dependencies {
-  implementation 'org.hyperledger.besu:besu-evm'
-  implementation 'org.hyperledger.besu.internal:besu-ethereum-core'
-  implementation 'org.hyperledger.besu.internal:besu-ethereum-rlp'
-  implementation 'org.hyperledger.besu.internal:besu-consensus-merge'
-  implementation 'org.hyperledger.besu.internal:besu-config'
-  implementation 'org.hyperledger.besu:besu-plugin-api'
-  implementation 'org.hyperledger.besu.internal:besu-metrics-core'
-  implementation 'org.hyperledger.besu.internal:besu-services-kvstore'
-}
-
-graalvmNative {
-  binaries {
-    main {
-      imageName = 'genr1testcase'
-      mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
-      buildArgs.add('--verbose')
-      buildArgs.add('--no-fallback')
-      buildArgs.add('-H:+ReportExceptionStackTraces')
-      buildArgs.add('--enable-all-security-services')
-      buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
-      buildArgs.add('-H:+AddAllCharsets')
+    withSourcesJar()
+    withJavadocJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
     }
-  }
-
-  toolchainDetection = true
 }
-
-tasks.withType(JavaCompile) {
-  options.encoding = 'UTF-8'
-}
-
 
 @Memoized
 def calculateVersion() {
-  String version = System.getenv("TAG_VERSION") ?: '1.0-SNAPSHOT'
-  // Regex pattern for basic calendar versioning, with provision to omit patch rev
-  def versionPattern = ~/\d+\.\d+(\.\d+)?(-.*)?/
-  if (! (version =~ versionPattern)) {
-    println("Supplied project version is malformed: ${version}, aborting")
-    throw new GradleException("Supplied project version is malformed: ${version}")
-  }
+    String version = System.getenv("TAG_VERSION") ?: '1.0-SNAPSHOT'
+    // Regex pattern for basic calendar versioning, with provision to omit patch rev
+    def versionPattern = ~/\d+\.\d+(\.\d+)?(-.*)?/
+    if (! (version =~ versionPattern)) {
+        println("Supplied project version is malformed: ${version}, aborting")
+        throw new GradleException("Supplied project version is malformed: ${version}")
+    }
 
-  if (version.endsWith("-SNAPSHOT")) {
-    version = version.replace("-SNAPSHOT", "-dev-" + getCheckedOutGitCommitHash())
-  }
-  return version
+    if (version.endsWith("-SNAPSHOT")) {
+        version = version.replace("-SNAPSHOT", "-dev-" + getCheckedOutGitCommitHash())
+    }
+    return version
 }
 
 @Memoized
 def getCheckedOutGitCommitHash() {
-  def gitFolder = "${rootDir}/.git/"
-  if (!file(gitFolder).exists()) {
-    return "unknownCommit"
-  }
-
-  try {
-    def takeFromHash = 8
-    def stdout = new ByteArrayOutputStream()
-    exec {
-      commandLine 'git', 'rev-parse', 'HEAD'
-      standardOutput = stdout
-      errorOutput = new ByteArrayOutputStream()
-      ignoreExitValue = true
+    def gitFolder = "${rootDir}/.git/"
+    if (!file(gitFolder).exists()) {
+        return "unknownCommit"
     }
-    return stdout.toString().trim().take(takeFromHash)
-  } catch (Exception e) {
-    return "unknownCommit"
-  }
-}
 
-build.dependsOn spotlessApply
+    try {
+        def takeFromHash = 8
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-parse', 'HEAD'
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        return stdout.toString().trim().take(takeFromHash)
+    } catch (Exception e) {
+        return "unknownCommit"
+    }
+}

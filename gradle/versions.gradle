@@ -1,14 +1,24 @@
 dependencyManagement {
     imports {
-        mavenBom "org.hyperledger.besu:bom:25.9.0"
-        mavenBom "org.apache.logging.log4j:log4j-bom:2.24.3"
+        //mavenBom "org.hyperledger.besu:bom:{$besuVersion}"
         mavenBom "org.hyperledger.besu:bom:${besuVersion}"
+        // Removed log4j-bom, using logback instead
     }
+}
+
+configurations.all {
+    exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j2-impl'
+    exclude group: 'org.apache.logging.log4j', module: 'log4j-core'
+    exclude group: 'org.apache.logging.log4j', module: 'log4j-api'
 }
 
 dependencies {
     implementation 'io.consensys.tuweni:tuweni-bytes'
     implementation 'io.consensys.tuweni:tuweni-units'
     implementation 'org.bouncycastle:bcprov-jdk18on'
+
+    // Use Logback as SLF4J implementation instead of Log4j2
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+
     errorprone 'com.google.errorprone:error_prone_core:2.35.1'
 }

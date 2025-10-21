@@ -1,1 +1,4 @@
 rootProject.name = 'besu-zkvm'
+
+include 'evm'
+include 'riscv'
