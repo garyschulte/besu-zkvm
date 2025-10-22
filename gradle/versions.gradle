@@ -1,7 +1,7 @@
 dependencyManagement {
     imports {
         //mavenBom "org.hyperledger.besu:bom:{$besuVersion}"
-        mavenBom "org.hyperledger.besu:bom:25.9.0"
+        mavenBom "org.hyperledger.besu:bom:${besuVersion}"
         // Removed log4j-bom, using logback instead
     }
 }

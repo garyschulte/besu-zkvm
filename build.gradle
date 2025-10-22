@@ -1,218 +1,259 @@
 import groovy.transform.Memoized
 
 plugins {
-    id 'java'
-    id 'application'
-    id 'org.graalvm.buildtools.native' version '0.10.3'
-    id 'com.github.ben-manes.versions' version '0.46.0'
-    id 'net.ltgt.errorprone' version '4.2.0'
-    id 'io.spring.dependency-management' version '1.1.6'
+  id 'java'
+  id 'application'
+  id 'org.graalvm.buildtools.native' version '0.10.3'
+  id 'com.github.ben-manes.versions' version '0.46.0'
+  id 'net.ltgt.errorprone' version '4.2.0'
+  id 'io.spring.dependency-management' version '1.1.6'
+  id 'com.diffplug.spotless' version '8.0.0'
 }
 
 group = 'org.hyperledger.besu.riscv'
 version = calculateVersion()
 
-def besuVersion = '25.9.0'
-
 repositories {
-    mavenCentral()
-    maven {
-        url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
-        content { includeGroupByRegex('org\\.hyperledger\\..*') }
-    }
-    maven {
-        url = 'https://artifacts.consensys.net/public/maven/maven/'
-        content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
-    }
-//    mavenLocal()
+  mavenCentral()
+  maven {
+    url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
+    content { includeGroupByRegex('org\\.hyperledger\\..*') }
+  }
+  maven {
+    url = 'https://artifacts.consensys.net/public/maven/maven/'
+    content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
+  }
+  //    mavenLocal()
 
-    // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
-    ivy {
-        url = 'https://github.com'
-        patternLayout {
-            // Hard-code the GitHub repo path; use the Gradle module name as the artifact base
-            artifact '/garyschulte/besu-native/releases/download/v[revision]/[module]-[revision](-[classifier]).[ext]'
-        }
-        metadataSources { artifact() } // artifact-only, no pom/ivy
-        content { includeGroup('org.hyperledger.besu') }
+  // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
+  ivy {
+    url = 'https://github.com'
+    patternLayout {
+      // Hard-code the GitHub repo path; use the Gradle module name as the artifact base
+      artifact '/garyschulte/besu-native/releases/download/v[revision]/[module]-[revision](-[classifier]).[ext]'
     }
+    metadataSources { artifact() } // artifact-only, no pom/ivy
+    content { includeGroup('org.hyperledger.besu') }
+  }
 }
 
 apply from: "${rootDir}/gradle/versions.gradle"
 
 java {
-    withSourcesJar()
-    withJavadocJar()
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+  withSourcesJar()
+  withJavadocJar()
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
 }
 
 application {
-    mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+  mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+}
+
+apply plugin: 'com.diffplug.spotless'
+spotless {
+  java {
+    // This path needs to be relative to each project
+    target 'src/**/*.java'
+    targetExclude '**/src/reference-test/**', '**/src/main/generated/**', '**/src/test/generated/**', '**/src/jmh/generated/**'
+    removeUnusedImports()
+    googleJavaFormat('1.17.0')
+    importOrder 'org.hyperledger', 'java', ''
+    trimTrailingWhitespace()
+    endWithNewline()
+    licenseHeaderFile "${rootDir}/gradle/spotless.java.license"
+  }
+  groovyGradle {
+    target '*.gradle'
+    greclipse('4.30.0').configFile(rootProject.file('gradle/formatter.properties'))
+    endWithNewline()
+  }
+  // Below this line are currently only license header tasks
+  format 'groovy', { target '**/src/*/grovy/**/*.groovy' }
+  format 'bash', { target '**/*.sh' }
+  format 'sol', { target '**/*.sol' }
 }
 
 // Task to extract native libraries from static JARs
 tasks.register('extractNativeLibs', Copy) {
-    def config = configurations.runtimeClasspath
-    def staticJars = config.files.findAll { it.name.contains('-static.jar') }
+  def config = configurations.runtimeClasspath
+  def staticJars = config.files.findAll { it.name.contains('-static.jar') }
 
-    staticJars.each { staticJar ->
-        println "Extracting native libraries from: ${staticJar.name}"
-        from(zipTree(staticJar)) {
-            include 'lib/**/*.a'
-            include 'lib/**/*.h'
-        }
+  staticJars.each { staticJar ->
+    println "Extracting native libraries from: ${staticJar.name}"
+    from(zipTree(staticJar)) {
+      include 'lib/**/*.a'
+      include 'lib/**/*.h'
     }
-    into layout.buildDirectory.dir('native-libs')
-
+  }
+  into layout.buildDirectory.dir('native-libs')
 }
 
 // Detect platform for library path, with override for cross-compilation
 def detectPlatform() {
-    // Check for explicit override first (for cross-compilation via Gradle project property)
-    def overrideArch = project.findProperty('CROSS_COMPILE_ARCH')
-    if (overrideArch) {
-        println "Using cross-compile architecture override: ${overrideArch}"
-        return overrideArch
-    }
+  // Check for explicit override first (for cross-compilation via Gradle project property)
+  def overrideArch = project.findProperty('CROSS_COMPILE_ARCH')
+  if (overrideArch) {
+    println "Using cross-compile architecture override: ${overrideArch}"
+    return overrideArch
+  }
 
-    // Auto-detect based on current platform
-    def osName = System.getProperty('os.name').toLowerCase()
-    def osArch = System.getProperty('os.arch').toLowerCase()
+  // Auto-detect based on current platform
+  def osName = System.getProperty('os.name').toLowerCase()
+  def osArch = System.getProperty('os.arch').toLowerCase()
 
-    if (osName.contains('mac')) {
-        if (osArch.contains('aarch64') || osArch.contains('arm')) {
-            return 'aarch64'
-        } else {
-            return 'x86-64'
-        }
-    } else if (osName.contains('linux')) {
-        if (osArch.contains('aarch64') || osArch.contains('arm')) {
-            return 'aarch64'
-        } else if (osArch.contains('riscv')) {
-            return 'riscv64'
-        } else {
-            return 'x86-64'
-        }
+  if (osName.contains('mac')) {
+    if (osArch.contains('aarch64') || osArch.contains('arm')) {
+      return 'aarch64'
+    } else {
+      return 'x86-64'
     }
-    return 'x86-64' // default
+  } else if (osName.contains('linux')) {
+    if (osArch.contains('aarch64') || osArch.contains('arm')) {
+      return 'aarch64'
+    } else if (osArch.contains('riscv')) {
+      return 'riscv64'
+    } else {
+      return 'x86-64'
+    }
+  }
+  return 'x86-64' // default
 }
 
 graalvmNative {
-    binaries {
-        main {
-            imageName = 'nativeImageTestRunner'
-            mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+  binaries {
+    main {
+      imageName = 'nativeImageTestRunner'
+      mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
 
-            // Use JAVA_HOME environment variable (GraalVM installation)
+      // Use JAVA_HOME environment variable (GraalVM installation)
 
-            buildArgs.add('--verbose')
-            buildArgs.add('--no-fallback')
-            buildArgs.add('-H:+ReportExceptionStackTraces')
-            buildArgs.add('--enable-all-security-services')
-            buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
-            buildArgs.add('-H:+AddAllCharsets')
+      buildArgs.add('--verbose')
+      buildArgs.add('--no-fallback')
+      buildArgs.add('-H:+ReportExceptionStackTraces')
+      buildArgs.add('--enable-all-security-services')
+      buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
+      buildArgs.add('-H:+AddAllCharsets')
 
-            // Add paths for static libraries
-            def platform = detectPlatform()
-            def nativeLibDir = layout.buildDirectory.dir("native-libs/lib/${platform}").get().asFile
-            buildArgs.add("-H:CLibraryPath=${nativeLibDir.absolutePath}")
+      // Add paths for static libraries
+      def platform = detectPlatform()
+      def nativeLibDir = layout.buildDirectory.dir("native-libs/lib/${platform}").get().asFile
+      buildArgs.add("-H:CLibraryPath=${nativeLibDir.absolutePath}")
 
-            // Add include path for header files
-            // Need to set this early so it's available during query code compilation
-            buildArgs.add("-H:CCompilerOption=-I${nativeLibDir.absolutePath}")
+      // Add include path for header files
+      // Need to set this early so it's available during query code compilation
+      buildArgs.add("-H:CCompilerOption=-I${nativeLibDir.absolutePath}")
 
-            // Also try adding as a system include path which might help with angle bracket includes
-            buildArgs.add("-H:CCompilerOption=-isystem")
-            buildArgs.add("-H:CCompilerOption=${nativeLibDir.absolutePath}")
+      // Also try adding as a system include path which might help with angle bracket includes
+      buildArgs.add("-H:CCompilerOption=-isystem")
+      buildArgs.add("-H:CCompilerOption=${nativeLibDir.absolutePath}")
 
-            // Link against the static libraries
-            buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
-            buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
-            buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
-            buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
-            buildArgs.add("-H:NativeLinkerOption=-lcrypto")
-            buildArgs.add("-H:NativeLinkerOption=-lboringssl_precompiles")
+      // Link against the static libraries
+      buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
+      buildArgs.add("-H:NativeLinkerOption=-lcrypto")
+      buildArgs.add("-H:NativeLinkerOption=-lboringssl_precompiles")
 
-            // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
-            // This is used for cross-compilation with LLVM backend or other experimental options
-            def nativeImageOptions = project.findProperty('NATIVE_IMAGE_OPTIONS')
+      // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
+      // This is used for cross-compilation with LLVM backend or other experimental options
+      def nativeImageOptions = project.findProperty('NATIVE_IMAGE_OPTIONS')
 
-            println "=========================================="
-            println "GraalVM Native Image Build Configuration"
-            println "Target platform: ${platform}"
-            println "CROSS_COMPILE_ARCH property: '${project.findProperty('CROSS_COMPILE_ARCH')}'"
-            println "NATIVE_IMAGE_OPTIONS property: '${nativeImageOptions}'"
+      println "=========================================="
+      println "GraalVM Native Image Build Configuration"
+      println "Target platform: ${platform}"
+      println "CROSS_COMPILE_ARCH property: '${project.findProperty('CROSS_COMPILE_ARCH')}'"
+      println "NATIVE_IMAGE_OPTIONS property: '${nativeImageOptions}'"
 
-            if (nativeImageOptions) {
-                println "Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
-                def parsedOptions = nativeImageOptions.toString().trim().split(/\s+/)
-                parsedOptions.each { option ->
-                    if (option && !option.isEmpty()) {
-                        println "  Adding: ${option}"
-                        buildArgs.add(option)
-                    }
-                }
-            } else {
-                println "NATIVE_IMAGE_OPTIONS not set (use -PNATIVE_IMAGE_OPTIONS=\"...\" to set)"
-            }
-            println "Total buildArgs count: ${buildArgs.size()}"
-            println "=========================================="
+      if (nativeImageOptions) {
+        println "Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
+        def parsedOptions = nativeImageOptions.toString().trim().split(/\s+/)
+        parsedOptions.each { option ->
+          if (option && !option.isEmpty()) {
+            println "  Adding: ${option}"
+            buildArgs.add(option)
+          }
         }
+      } else {
+        println "NATIVE_IMAGE_OPTIONS not set (use -PNATIVE_IMAGE_OPTIONS=\"...\" to set)"
+      }
+      println "Total buildArgs count: ${buildArgs.size()}"
+      println "=========================================="
     }
+  }
 
-    toolchainDetection = false
+  toolchainDetection = false
 }
 
 // Make nativeCompile depend on extracting the libraries
 tasks.named('nativeCompile') {
-    dependsOn 'extractNativeLibs'
+  dependsOn 'extractNativeLibs'
 }
 
 // Make build task include native image compilation
 tasks.named('build') {
-    dependsOn tasks.named('nativeCompile')
+  dependsOn tasks.named('nativeCompile')
+}
+
+tasks.register('runBlockRunner', JavaExec) {
+  group = 'application'
+  description = 'Run BlockRunner main class'
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = 'org.hyperledger.besu.riscv.poc.block.execution.BlockRunner'
+  outputs.upToDateWhen { false }
 }
 
 tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
+  options.encoding = 'UTF-8'
+}
+
+dependencies {
+  implementation 'org.hyperledger.besu:besu-evm'
+  implementation 'org.hyperledger.besu.internal:besu-ethereum-core'
+  implementation 'org.hyperledger.besu.internal:besu-ethereum-rlp'
+  implementation 'org.hyperledger.besu.internal:besu-consensus-merge'
+  implementation 'org.hyperledger.besu.internal:besu-config'
+  implementation 'org.hyperledger.besu:besu-plugin-api'
+  implementation 'org.hyperledger.besu.internal:besu-metrics-core'
+  implementation 'org.hyperledger.besu.internal:besu-services-kvstore'
 }
 
 @Memoized
 def calculateVersion() {
-    String version = System.getenv("TAG_VERSION") ?: '1.0-SNAPSHOT'
-    // Regex pattern for basic calendar versioning, with provision to omit patch rev
-    def versionPattern = ~/\d+\.\d+(\.\d+)?(-.*)?/
-    if (! (version =~ versionPattern)) {
-        println("Supplied project version is malformed: ${version}, aborting")
-        throw new GradleException("Supplied project version is malformed: ${version}")
-    }
+  String version = System.getenv("TAG_VERSION") ?: '1.0-SNAPSHOT'
+  // Regex pattern for basic calendar versioning, with provision to omit patch rev
+  def versionPattern = ~/\d+\.\d+(\.\d+)?(-.*)?/
+  if (! (version =~ versionPattern)) {
+    println("Supplied project version is malformed: ${version}, aborting")
+    throw new GradleException("Supplied project version is malformed: ${version}")
+  }
 
-    if (version.endsWith("-SNAPSHOT")) {
-        version = version.replace("-SNAPSHOT", "-dev-" + getCheckedOutGitCommitHash())
-    }
-    return version
+  if (version.endsWith("-SNAPSHOT")) {
+    version = version.replace("-SNAPSHOT", "-dev-" + getCheckedOutGitCommitHash())
+  }
+  return version
 }
 
 @Memoized
 def getCheckedOutGitCommitHash() {
-    def gitFolder = "${rootDir}/.git/"
-    if (!file(gitFolder).exists()) {
-        return "unknownCommit"
-    }
+  def gitFolder = "${rootDir}/.git/"
+  if (!file(gitFolder).exists()) {
+    return "unknownCommit"
+  }
 
-    try {
-        def takeFromHash = 8
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-parse', 'HEAD'
-            standardOutput = stdout
-            errorOutput = new ByteArrayOutputStream()
-            ignoreExitValue = true
-        }
-        return stdout.toString().trim().take(takeFromHash)
-    } catch (Exception e) {
-        return "unknownCommit"
+  try {
+    def takeFromHash = 8
+    def stdout = new ByteArrayOutputStream()
+    exec {
+      commandLine 'git', 'rev-parse', 'HEAD'
+      standardOutput = stdout
+      errorOutput = new ByteArrayOutputStream()
+      ignoreExitValue = true
     }
+    return stdout.toString().trim().take(takeFromHash)
+  } catch (Exception e) {
+    return "unknownCommit"
+  }
 }
