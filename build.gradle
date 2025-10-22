@@ -10,6 +10,47 @@ plugins {
   id 'com.diffplug.spotless' version '8.0.0'
 }
 
+group = 'org.hyperledger.besu.riscv'
+version = calculateVersion()
+
+repositories {
+  mavenCentral()
+  maven {
+    url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
+    content { includeGroupByRegex('org\\.hyperledger\\..*') }
+  }
+  maven {
+    url = 'https://artifacts.consensys.net/public/maven/maven/'
+    content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
+  }
+  //    mavenLocal()
+
+  // temporarily using garyschulte:besu-native releases until CI builds all arch and static artifacts
+  ivy {
+    url = 'https://github.com'
+    patternLayout {
+      // Hard-code the GitHub repo path; use the Gradle module name as the artifact base
+      artifact '/garyschulte/besu-native/releases/download/v[revision]/[module]-[revision](-[classifier]).[ext]'
+    }
+    metadataSources { artifact() } // artifact-only, no pom/ivy
+    content { includeGroup('org.hyperledger.besu') }
+  }
+}
+
+apply from: "${rootDir}/gradle/versions.gradle"
+
+java {
+  withSourcesJar()
+  withJavadocJar()
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
+}
+
+application {
+  mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+}
+
 apply plugin: 'com.diffplug.spotless'
 spotless {
   java {
@@ -34,37 +75,138 @@ spotless {
   format 'sol', { target '**/*.sol' }
 }
 
+// Task to extract native libraries from static JARs
+tasks.register('extractNativeLibs', Copy) {
+  def config = configurations.runtimeClasspath
+  def staticJars = config.files.findAll { it.name.contains('-static.jar') }
 
-group = 'org.hyperledger.besu.riscv'
-version = calculateVersion()
-
-def besuVersion = '25.9.0'
-
-repositories {
-  mavenLocal()
-  mavenCentral()
-  maven {
-    url = 'https://hyperledger.jfrog.io/hyperledger/besu-maven'
-    content { includeGroupByRegex('org\\.hyperledger\\..*') }
+  staticJars.each { staticJar ->
+    println "Extracting native libraries from: ${staticJar.name}"
+    from(zipTree(staticJar)) {
+      include 'lib/**/*.a'
+      include 'lib/**/*.h'
+    }
   }
-  maven {
-    url = 'https://artifacts.consensys.net/public/maven/maven/'
-    content { includeGroupByRegex('tech\\.pegasys(\\..*)?') }
-  }
+  into layout.buildDirectory.dir('native-libs')
 }
 
-apply from: "${rootDir}/gradle/versions.gradle"
-
-java {
-  withSourcesJar()
-  withJavadocJar()
-  toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
+// Detect platform for library path, with override for cross-compilation
+def detectPlatform() {
+  // Check for explicit override first (for cross-compilation via Gradle project property)
+  def overrideArch = project.findProperty('CROSS_COMPILE_ARCH')
+  if (overrideArch) {
+    println "Using cross-compile architecture override: ${overrideArch}"
+    return overrideArch
   }
+
+  // Auto-detect based on current platform
+  def osName = System.getProperty('os.name').toLowerCase()
+  def osArch = System.getProperty('os.arch').toLowerCase()
+
+  if (osName.contains('mac')) {
+    if (osArch.contains('aarch64') || osArch.contains('arm')) {
+      return 'aarch64'
+    } else {
+      return 'x86-64'
+    }
+  } else if (osName.contains('linux')) {
+    if (osArch.contains('aarch64') || osArch.contains('arm')) {
+      return 'aarch64'
+    } else if (osArch.contains('riscv')) {
+      return 'riscv64'
+    } else {
+      return 'x86-64'
+    }
+  }
+  return 'x86-64' // default
 }
 
-application {
-  mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
+graalvmNative {
+  binaries {
+    main {
+      imageName = 'nativeImageTestRunner'
+      mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
+
+      // Use JAVA_HOME environment variable (GraalVM installation)
+
+      buildArgs.add('--verbose')
+      buildArgs.add('--no-fallback')
+      buildArgs.add('-H:+ReportExceptionStackTraces')
+      buildArgs.add('--enable-all-security-services')
+      buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
+      buildArgs.add('-H:+AddAllCharsets')
+
+      // Add paths for static libraries
+      def platform = detectPlatform()
+      def nativeLibDir = layout.buildDirectory.dir("native-libs/lib/${platform}").get().asFile
+      buildArgs.add("-H:CLibraryPath=${nativeLibDir.absolutePath}")
+
+      // Add include path for header files
+      // Need to set this early so it's available during query code compilation
+      buildArgs.add("-H:CCompilerOption=-I${nativeLibDir.absolutePath}")
+
+      // Also try adding as a system include path which might help with angle bracket includes
+      buildArgs.add("-H:CCompilerOption=-isystem")
+      buildArgs.add("-H:CCompilerOption=${nativeLibDir.absolutePath}")
+
+      // Link against the static libraries
+      buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
+      buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
+      buildArgs.add("-H:NativeLinkerOption=-lcrypto")
+      buildArgs.add("-H:NativeLinkerOption=-lboringssl_precompiles")
+
+      // Honor NATIVE_IMAGE_OPTIONS project property (passed via -PNATIVE_IMAGE_OPTIONS="...")
+      // This is used for cross-compilation with LLVM backend or other experimental options
+      def nativeImageOptions = project.findProperty('NATIVE_IMAGE_OPTIONS')
+
+      println "=========================================="
+      println "GraalVM Native Image Build Configuration"
+      println "Target platform: ${platform}"
+      println "CROSS_COMPILE_ARCH property: '${project.findProperty('CROSS_COMPILE_ARCH')}'"
+      println "NATIVE_IMAGE_OPTIONS property: '${nativeImageOptions}'"
+
+      if (nativeImageOptions) {
+        println "Parsing and adding NATIVE_IMAGE_OPTIONS to buildArgs"
+        def parsedOptions = nativeImageOptions.toString().trim().split(/\s+/)
+        parsedOptions.each { option ->
+          if (option && !option.isEmpty()) {
+            println "  Adding: ${option}"
+            buildArgs.add(option)
+          }
+        }
+      } else {
+        println "NATIVE_IMAGE_OPTIONS not set (use -PNATIVE_IMAGE_OPTIONS=\"...\" to set)"
+      }
+      println "Total buildArgs count: ${buildArgs.size()}"
+      println "=========================================="
+    }
+  }
+
+  toolchainDetection = false
+}
+
+// Make nativeCompile depend on extracting the libraries
+tasks.named('nativeCompile') {
+  dependsOn 'extractNativeLibs'
+}
+
+// Make build task include native image compilation
+tasks.named('build') {
+  dependsOn tasks.named('nativeCompile')
+}
+
+tasks.register('runBlockRunner', JavaExec) {
+  group = 'application'
+  description = 'Run BlockRunner main class'
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = 'org.hyperledger.besu.riscv.poc.block.execution.BlockRunner'
+  outputs.upToDateWhen { false }
+}
+
+tasks.withType(JavaCompile) {
+  options.encoding = 'UTF-8'
 }
 
 dependencies {
@@ -77,28 +219,6 @@ dependencies {
   implementation 'org.hyperledger.besu.internal:besu-metrics-core'
   implementation 'org.hyperledger.besu.internal:besu-services-kvstore'
 }
-
-graalvmNative {
-  binaries {
-    main {
-      imageName = 'genr1testcase'
-      mainClass = 'org.hyperledger.besu.riscv.poc.GenR1TestCase'
-      buildArgs.add('--verbose')
-      buildArgs.add('--no-fallback')
-      buildArgs.add('-H:+ReportExceptionStackTraces')
-      buildArgs.add('--enable-all-security-services')
-      buildArgs.add('--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV')
-      buildArgs.add('-H:+AddAllCharsets')
-    }
-  }
-
-  toolchainDetection = true
-}
-
-tasks.withType(JavaCompile) {
-  options.encoding = 'UTF-8'
-}
-
 
 @Memoized
 def calculateVersion() {
@@ -137,5 +257,3 @@ def getCheckedOutGitCommitHash() {
     return "unknownCommit"
   }
 }
-
-build.dependsOn spotlessApply
