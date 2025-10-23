@@ -392,10 +392,11 @@ public class BlockRunner {
     String path = filePath.orElse(defaultResourcePath);
 
     // Try loading from classpath resource first
-    var inputStream = BlockRunner.class.getResourceAsStream(path);
-    if (inputStream != null) {
-      System.out.println("Loading from classpath: " + path);
-      return new String(inputStream.readAllBytes());
+    try (var inputStream = BlockRunner.class.getResourceAsStream(path)) {
+      if (inputStream != null) {
+        System.out.println("Loading from classpath: " + path);
+        return new String(inputStream.readAllBytes());
+      }
     }
     // Fall back to filesystem
     System.out.println("Loading from filesystem: " + path);
