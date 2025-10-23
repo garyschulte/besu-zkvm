@@ -109,7 +109,7 @@
     "allDeclaredMethods": true
   },
   {
-    "name": "org.hyperledger.besu.riscv.poc.evm.ExecutionWitnessJson",
+    "name": "org.hyperledger.besu.riscv.poc.block.execution.ExecutionWitnessJson",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },

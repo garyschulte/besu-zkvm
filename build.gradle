@@ -65,7 +65,7 @@ java {
 }
 
 application {
-  mainClass = 'org.hyperledger.besu.riscv.poc.BlockRunner'
+  mainClass = 'org.hyperledger.besu.riscv.poc.block.execution.BlockRunner'
 }
 
 apply plugin: 'com.diffplug.spotless'
@@ -158,7 +158,7 @@ graalvmNative {
     main {
       imageName = 'blockRunner'
       // mainClass = 'org.hyperledger.besu.riscv.poc.NativeImageTestRunner'
-      mainClass = 'org.hyperledger.besu.riscv.poc.evm.BlockRunner'
+      mainClass = 'org.hyperledger.besu.riscv.poc.block.execution.BlockRunner'
 
       // Use JAVA_HOME environment variable (GraalVM installation)
 
