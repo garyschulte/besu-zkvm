@@ -9,6 +9,24 @@
       },
       {
         "pattern": "\\Qlogback.xml\\E"
+      },
+      {
+        "pattern": "\\Qstate.json\\E"
+      },
+      {
+        "pattern": "\\Qblock.rlp\\E"
+      },
+      {
+        "pattern": "\\Qmainnet.json\\E"
+      },
+      {
+        "pattern": "\\Qsepolia.json\\E"
+      },
+      {
+        "pattern": "\\Qhoodi.json\\E"
+      },
+      {
+        "pattern": "\\Qholesky.json\\E"
       }
     ]
   }

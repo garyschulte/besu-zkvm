@@ -1,8 +1,10 @@
 dependencyManagement {
     imports {
-        //mavenBom "org.hyperledger.besu:bom:{$besuVersion}"
         mavenBom "org.hyperledger.besu:bom:${besuVersion}"
+        // remove temp ref to local build of besu with safe BesuVersionUtils
+        // mavenBom "org.hyperledger.besu:bom:25.10-develop-d28fd4f"
         // Removed log4j-bom, using logback instead
+        mavenBom "org.apache.logging.log4j:log4j-bom:2.24.3"
     }
 }
 
