@@ -301,6 +301,9 @@ public class BlockRunner {
 
     final ProtocolSpec protocolSpec = protocolSchedule.getByBlockHeader(block.getHeader());
 
+    System.out.println("Starting block execution...");
+    final long blockStartTime = System.nanoTime();
+
     final BlockProcessingResult result =
         protocolSpec
             .getBlockValidator()
@@ -311,6 +314,9 @@ public class BlockRunner {
                 HeaderValidationMode.NONE,
                 true,
                 false);
+
+    final long blockEndTime = System.nanoTime();
+    final double blockExecutionTimeMs = (blockEndTime - blockStartTime) / 1_000_000.0;
 
     if (!result.isSuccessful()) {
       System.out.println(
@@ -327,6 +333,7 @@ public class BlockRunner {
     System.out.println("  Transactions: " + block.getBody().getTransactions().size());
     System.out.println("  Receipts: " + result.getReceipts().size());
     System.out.println("  Gas used: " + block.getHeader().getGasUsed());
+    System.out.println(String.format("  Block execution time: %.2f ms", blockExecutionTimeMs));
     System.out.println("  Stateroot: " + result.getYield().get().getWorldState().rootHash());
   }
 
@@ -404,6 +411,8 @@ public class BlockRunner {
   }
 
   public static void main(final String[] args) {
+    final long programStartTime = System.nanoTime();
+
     System.out.println("Starting BlockRunner .");
     CommandLineArgs cmdArgs = parseArguments(args);
     try {
@@ -467,10 +476,27 @@ public class BlockRunner {
               .sorted(Comparator.comparing(BlockHeader::getNumber))
               .toList();
 
+      final long setupEndTime = System.nanoTime();
+      final double setupTimeMs = (setupEndTime - programStartTime) / 1_000_000.0;
+      System.out.println(String.format("\n✓ Setup completed in %.2f ms\n", setupTimeMs));
+
       final BlockRunner runner =
           BlockRunner.create(previousHeaders, trieNodes, codes, genesisConfigJson);
 
       runner.processBlock(blockToImport);
+
+      final long programEndTime = System.nanoTime();
+      final double totalTimeMs = (programEndTime - programStartTime) / 1_000_000.0;
+      final double blockProcessingTimeMs = totalTimeMs - setupTimeMs;
+
+      System.out.println("\n" + "=".repeat(60));
+      System.out.println("TIMING SUMMARY");
+      System.out.println("=".repeat(60));
+      System.out.println(String.format("  Setup time:           %.2f ms", setupTimeMs));
+      System.out.println(String.format("  Block processing:     %.2f ms", blockProcessingTimeMs));
+      System.out.println(String.format("  Total program time:   %.2f ms", totalTimeMs));
+      System.out.println("=".repeat(60));
+
     } catch (Exception e) {
       System.err.println("Error loading or processing block: " + e.getMessage());
       e.printStackTrace();
