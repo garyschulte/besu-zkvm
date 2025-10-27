@@ -19,7 +19,6 @@ import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.consensus.merge.PostMergeContext;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
-import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.ProtocolContext;
@@ -30,10 +29,8 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
-import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
-import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.rlp.RLP;
@@ -47,14 +44,11 @@ import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.cache.CodeCache;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.cache.NoopBonsaiCachedMerkleTrieLoader;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.storage.BonsaiWorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
-import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
-import org.hyperledger.besu.evm.precompile.PrecompileContractRegistry;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.ServiceManager;
 import org.hyperledger.besu.plugin.services.BesuService;
 import org.hyperledger.besu.riscv.poc.crypto.SECP256K1Graal;
-import org.hyperledger.besu.riscv.poc.evm.precompiles.GraalECRECPrecompiledContract;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 import org.hyperledger.besu.services.kvstore.SegmentedInMemoryKeyValueStorage;
 
@@ -94,6 +88,7 @@ public class BlockRunner {
    * to process a block.
    */
   public static BlockRunner create(
+      final BlockHeader targetBlockHeader,
       final List<BlockHeader> prevHeaders,
       final Map<Hash, Bytes> trieNodes,
       final Map<Hash, Bytes> codes,
@@ -110,15 +105,15 @@ public class BlockRunner {
             EvmConfiguration.WorldUpdaterMode.STACKED,
             true);
 
-    // Build the mainnet protocol schedule based on the genesis config.
+    // Build a minimal protocol schedule with only the necessary fork spec and Graal precompiles.
+    // This avoids the overhead of building all fork specs from Frontier through the latest,
+    // and prevents loading JNA-based native libraries that will be replaced.
     final ProtocolSchedule protocolSchedule =
-        MainnetProtocolSchedule.fromConfig(
-            genesisConfig.getConfigOptions(),
+        MinimalProtocolSchedule.create(
+            targetBlockHeader,
+            genesisConfig,
             evmConfiguration,
-            MiningConfiguration.MINING_DISABLED,
             new BadBlockManager(),
-            false,
-            false,
             noOpMetricsSystem);
 
     // Construct the genesis state and world state root.
@@ -242,15 +237,8 @@ public class BlockRunner {
             .withServiceManager(serviceManager)
             .build();
 
-    // TODO: it would be better to implement a lean protocol schedule with its own precompile registry
-    //       but here we just overwrite the precompileRegistry entries to use the graal-specific
-    //       ones.  Longer term, this would probably be zkvm specific configs using eCalls.  but
-    //       for now, keep-it-simple:
-    final ProtocolSpec spec = protocolSchedule
-        .getByBlockHeader(blockchain.getChainHeadHeader());
-    final PrecompileContractRegistry registry = spec.getPrecompileContractRegistry();
-    decoratePrecompiles(registry, spec.getGasCalculator());
-
+    // The MinimalProtocolSchedule already created the correct precompile registry
+    // with Graal-native implementations, so no additional decoration is needed.
     return new BlockRunner(protocolSchedule, protocolContext, blockchain);
   }
 
@@ -287,10 +275,6 @@ public class BlockRunner {
     updater.setChainHead(previousHash);
     updater.putTotalDifficulty(previousHash, Difficulty.ZERO);
     return previous;
-  }
-
-  static private void decoratePrecompiles(PrecompileContractRegistry registry, GasCalculator calc) {
-    registry.put(Address.ECREC, new GraalECRECPrecompiledContract(calc));
   }
 
   private BlockRunner(
@@ -508,7 +492,8 @@ public class BlockRunner {
       System.out.println(String.format("\n✓ Setup completed in %.2f ms\n", setupTimeMs));
 
       final BlockRunner runner =
-          BlockRunner.create(previousHeaders, trieNodes, codes, genesisConfigJson);
+          BlockRunner.create(
+              blockToImport.getHeader(), previousHeaders, trieNodes, codes, genesisConfigJson);
 
       runner.processBlock(blockToImport);
 
