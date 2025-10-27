@@ -16,7 +16,7 @@ import org.hyperledger.besu.crypto.Hash;
 import org.hyperledger.besu.evm.frame.MessageFrame;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.precompile.ECRECPrecompiledContract;
-import org.hyperledger.besu.nativelib.secp256k1.LibSecp256k1Graal;
+import org.hyperledger.besu.nativelib.secp256k1.LibSecp256k1EcrecoverGraal;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -28,9 +28,8 @@ import org.slf4j.LoggerFactory;
 /**
  * GraalVM native implementation of the ECRECOVER precompiled contract.
  *
- * <p>This implementation extends the standard ECRECPrecompiledContract and overrides the compute
- * method to use LibSecp256k1Graal for native execution compatible with GraalVM native image
- * compilation.
+ * <p>This implementation uses LibSecp256k1EcrecoverGraal which provides the same interface as the
+ * JNI version but is compatible with GraalVM native image compilation.
  */
 public class GraalECRECPrecompiledContract extends ECRECPrecompiledContract {
 
@@ -50,55 +49,67 @@ public class GraalECRECPrecompiledContract extends ECRECPrecompiledContract {
   public PrecompileContractResult computePrecompile(
       final Bytes input, final MessageFrame messageFrame) {
 
-    LOG.info("-----------------------------------");
-    LOG.info("USING GraalECRECPrecompiledContract");
-    LOG.info("-----------------------------------");
+    LOG.debug("===========================================");
+    LOG.debug("ECREC CALLED");
+    LOG.debug("  Transaction: {}", messageFrame.getOriginatorAddress());
+    LOG.debug("  Recipient: {}", messageFrame.getRecipientAddress());
+    LOG.debug("  Contract: {}", messageFrame.getContractAddress());
+    LOG.debug("===========================================");
+
     final int size = input.size();
     final Bytes safeInput =
         size >= 128 ? input : Bytes.wrap(input, MutableBytes.create(128 - size));
 
     // Validate that bytes 32-62 are zero (v is in byte 63)
     if (!safeInput.slice(32, 31).isZero()) {
-      LOG.info("ECREC: bytes 32-62 are not zero, returning empty");
+      LOG.debug("ECREC: bytes 32-62 are not zero, returning empty");
       return PrecompileContractResult.success(Bytes.EMPTY);
     }
 
     try {
       final Bytes32 messageHash = Bytes32.wrap(safeInput, 0);
       final int recId = safeInput.get(63) - V_BASE;
-      LOG.info("ECREC: messageHash={}, recId={}", messageHash.toHexString(), recId);
-
-      // Extract the 64-byte signature (r and s)
       final byte[] sigBytes = safeInput.slice(64, 64).toArrayUnsafe();
-      LOG.info("ECREC: sigBytes length={}", sigBytes.length);
 
-      // Get context first to see if that's where it crashes
-      LOG.info("ECREC: Getting context...");
-      org.graalvm.word.PointerBase ctx = LibSecp256k1Graal.getContext();
-      LOG.info("ECREC: Got context (isNull={})", ctx.isNull());
+      LOG.atDebug()
+          .setMessage("ECREC: messageHash={}, recId={}, sigBytes length={}")
+          .addArgument(messageHash::toHexString)
+          .addArgument(recId)
+          .addArgument(() -> sigBytes.length)
+          .log();
 
-      // Call the GraalVM-compatible native recovery function
-      LOG.info("ECREC: Calling ecdsaRecover...");
+      // Call LibSecp256k1EcrecoverGraal which returns a 65-byte uncompressed public key
+      // This matches the JNI version exactly
       final byte[] recoveredPubkey =
-          LibSecp256k1Graal.ecdsaRecover(ctx, sigBytes, messageHash.toArrayUnsafe(), recId);
-      LOG.info("ECREC: ecdsaRecover returned, pubkey={}", recoveredPubkey);
+          LibSecp256k1EcrecoverGraal.secp256k1EcrecoverWithAlloc(
+              messageHash.toArrayUnsafe(), sigBytes, recId);
 
       if (recoveredPubkey == null) {
-        LOG.info("ECREC: Recovery failed, returning empty");
+        LOG.debug("ECREC: Recovery failed, returning empty");
         return PrecompileContractResult.success(Bytes.EMPTY);
       }
 
-      // The recovered pubkey is in internal 64-byte format, which is what we need
-      // According to the secp256k1 library, the internal representation is already the raw X,Y coordinates
-      // We just need to hash it directly (no serialization needed)
-      LOG.info("ECREC: Hashing recovered pubkey (length={})...", recoveredPubkey.length);
-      final Bytes32 hashed = Hash.keccak256(Bytes.wrap(recoveredPubkey));
+      LOG.atDebug()
+          .setMessage("ECREC: Recovered 65-byte pubkey, first byte: 0x{}")
+          .addArgument(() -> String.format("%02x", recoveredPubkey[0]))
+          .log();
+
+      // Strip the 0x04 prefix to get the 64-byte public key (X || Y coordinates)
+      // Then hash it to derive the Ethereum address
+      // final byte[] publicKey = new byte[64];
+      // System.arraycopy(recoveredPubkey, 1, publicKey, 0, 64);
+      // final Bytes32 hashed = Hash.keccak256(Bytes.wrap(publicKey));
+
+      final Bytes32 hashed = Hash.keccak256(Bytes.wrap(recoveredPubkey).slice(1));
 
       // Return the last 20 bytes as the address (right-padded to 32 bytes)
       final MutableBytes32 result = MutableBytes32.create();
       hashed.slice(12).copyTo(result, 12);
 
-      LOG.info("ECREC: Success, returning result={}", result.toHexString());
+      LOG.atDebug()
+          .setMessage("ECREC: Success, returning result={}")
+          .addArgument(result::toHexString)
+          .log();
       return PrecompileContractResult.success(result);
 
     } catch (final IllegalArgumentException e) {

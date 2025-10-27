@@ -35,6 +35,7 @@ import org.hyperledger.besu.riscv.poc.evm.precompiles.GraalAltBN128AddPrecompile
 import org.hyperledger.besu.riscv.poc.evm.precompiles.GraalAltBN128MulPrecompiledContract;
 import org.hyperledger.besu.riscv.poc.evm.precompiles.GraalAltBN128PairingPrecompiledContract;
 import org.hyperledger.besu.riscv.poc.evm.precompiles.GraalECRECPrecompiledContract;
+import org.hyperledger.besu.riscv.poc.evm.precompiles.MockPrecompiledContract;
 
 import java.math.BigInteger;
 import java.util.Optional;
@@ -107,7 +108,7 @@ public class MinimalProtocolSchedule {
         MinimalProtocolSchedule::createGraalPrecompileRegistry);
     builder.badBlocksManager(badBlockManager);
 
-    // Ensure the appropriate pre-execution processor is set for this fork
+    // set the appropriate pre-execution processor
     // The fork definitions SHOULD set this, but we explicitly set it as a safety measure
     // to prevent NullPointerException in AbstractBlockProcessor.processBlock
     ensurePreExecutionProcessor(builder, forkInfo.name());
@@ -122,12 +123,6 @@ public class MinimalProtocolSchedule {
 
     // Build the protocol spec, passing the schedule (which will be populated below)
     final ProtocolSpec spec = builder.build(protocolSchedule);
-
-    // Verify preExecutionProcessor is set (should never be null after ensurePreExecutionProcessor)
-    if (spec.getPreExecutionProcessor() == null) {
-      throw new IllegalStateException("PreExecutionProcessor is null for fork: " + forkInfo.name());
-    }
-    LOG.info("PreExecutionProcessor successfully set: {}", spec.getPreExecutionProcessor().getClass().getSimpleName());
 
     // Now set the spec in the schedule to resolve the circular dependency
     protocolSchedule.setProtocolSpec(spec);
@@ -144,7 +139,6 @@ public class MinimalProtocolSchedule {
   private static void ensurePreExecutionProcessor(
       final ProtocolSpecBuilder builder, final String forkName) {
     switch (forkName) {
-      case "Cancun" -> builder.preExecutionProcessor(new CancunPreExecutionProcessor());
       case "Prague", "Osaka" -> builder.preExecutionProcessor(new PraguePreExecutionProcessor());
       default -> builder.preExecutionProcessor(new FrontierPreExecutionProcessor());
     }
@@ -181,14 +175,35 @@ public class MinimalProtocolSchedule {
     registry.put(
         Address.ALTBN128_PAIRING, new GraalAltBN128PairingPrecompiledContract(gasCalculator));
 
-    // Add Istanbul precompiles
-    // TODO: Add BLAKE2BF if needed (pure Java, needs reflection or package relocation)
-    // registry.put(Address.BLAKE2B_F_COMPRESSION, ...);
+    // Add Byzantium MODEXP as mock (pure Java, but needs package access workaround)
+    registry.put(Address.MODEXP, new MockPrecompiledContract("MODEXP", gasCalculator));
 
-    // Note: For post-Istanbul forks (Prague+), additional precompiles may be needed:
-    // - BLS12 precompiles require LibGnarkEIP2537Graal
-    // - P256Verify requires BoringSSL
-    // These are not included as they're not needed for Paris-Cancun era blocks
+    // Add Istanbul BLAKE2BF as mock
+    registry.put(
+        Address.BLAKE2B_F_COMPRESSION,
+        new MockPrecompiledContract("BLAKE2B_F_COMPRESSION", gasCalculator));
+
+    // Add Cancun KZG_POINT_EVAL as mock (EIP-4844)
+    registry.put(
+        Address.KZG_POINT_EVAL, new MockPrecompiledContract("KZG_POINT_EVAL", gasCalculator));
+
+    // Add Prague BLS12-381 precompiles as mocks (EIP-2537)
+    registry.put(Address.BLS12_G1ADD, new MockPrecompiledContract("BLS12_G1ADD", gasCalculator));
+    registry.put(
+        Address.BLS12_G1MULTIEXP,
+        new MockPrecompiledContract("BLS12_G1MULTIEXP", gasCalculator));
+    registry.put(Address.BLS12_G2ADD, new MockPrecompiledContract("BLS12_G2ADD", gasCalculator));
+    registry.put(
+        Address.BLS12_G2MULTIEXP,
+        new MockPrecompiledContract("BLS12_G2MULTIEXP", gasCalculator));
+    registry.put(
+        Address.BLS12_PAIRING, new MockPrecompiledContract("BLS12_PAIRING", gasCalculator));
+    registry.put(
+        Address.BLS12_MAP_FP_TO_G1,
+        new MockPrecompiledContract("BLS12_MAP_FP_TO_G1", gasCalculator));
+    registry.put(
+        Address.BLS12_MAP_FP2_TO_G2,
+        new MockPrecompiledContract("BLS12_MAP_FP2_TO_G2", gasCalculator));
 
     return registry;
   }

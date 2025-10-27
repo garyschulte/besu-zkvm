@@ -185,6 +185,7 @@ graalvmNative {
 
       // Link against the static libraries
       buildArgs.add("-H:NativeLinkerOption=-lsecp256k1")
+      buildArgs.add("-H:NativeLinkerOption=-lsecp256k1_ecrecover")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_jni")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_196")
       buildArgs.add("-H:NativeLinkerOption=-lgnark_eip_2537")
