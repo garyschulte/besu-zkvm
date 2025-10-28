@@ -29,8 +29,10 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
+import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.rlp.RLP;
@@ -82,11 +84,21 @@ public class BlockRunner {
       Optional<String> blockRlpPath,
       Optional<String> genesisConfigPath) {}
 
-  /**
-   * Factory method that builds a complete in-memory Besu execution environment. It imports previous
-   * headers, reconstructs the world state from a witness, and returns a {@link BlockRunner} ready
-   * to process a block.
-   */
+  private static final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
+
+  // Configure the EVM with in-memory (stacked) world updater mode.
+  private static final EvmConfiguration evmConfiguration =
+      new EvmConfiguration(
+          EvmConfiguration.DEFAULT.jumpDestCacheWeightKB(),
+          EvmConfiguration.WorldUpdaterMode.STACKED,
+          true);
+  /*
+
+    /**
+     * Factory method that builds a complete in-memory Besu execution environment. It imports previous
+     * headers, reconstructs the world state from a witness, and returns a {@link BlockRunner} ready
+     * to process a block.
+     */
   public static BlockRunner create(
       final BlockHeader targetBlockHeader,
       final List<BlockHeader> prevHeaders,
@@ -96,25 +108,12 @@ public class BlockRunner {
 
     final GenesisConfig genesisConfig = GenesisConfig.fromConfig(genesisConfigJson);
 
-    final NoOpMetricsSystem noOpMetricsSystem = new NoOpMetricsSystem();
+    // use a minimal protocol schedule:
+    final ProtocolSchedule protocolSchedule = constructMinimalConfig(genesisConfig, targetBlockHeader);
 
-    // Configure the EVM with in-memory (stacked) world updater mode.
-    final EvmConfiguration evmConfiguration =
-        new EvmConfiguration(
-            EvmConfiguration.DEFAULT.jumpDestCacheWeightKB(),
-            EvmConfiguration.WorldUpdaterMode.STACKED,
-            true);
-
-    // Build a minimal protocol schedule with only the necessary fork spec and Graal precompiles.
-    // This avoids the overhead of building all fork specs from Frontier through the latest,
-    // and prevents loading JNA-based native libraries that will be replaced.
-    final ProtocolSchedule protocolSchedule =
-        MinimalProtocolSchedule.create(
-            targetBlockHeader,
-            genesisConfig,
-            evmConfiguration,
-            new BadBlockManager(),
-            noOpMetricsSystem);
+    //TODO: possibly make minimal vs mainnet protocol schedule configurable
+//    // or use the mainnet-derived protocol schedule
+//    final ProtocolSchedule protocolSchedule = constructFromGenesisConfig(genesisConfig);
 
     // Construct the genesis state and world state root.
     final GenesisState genesisState =
@@ -342,6 +341,33 @@ public class BlockRunner {
     System.out.println("  Stateroot: " + result.getYield().get().getWorldState().rootHash());
   }
 
+  private static ProtocolSchedule constructMinimalConfig(
+      GenesisConfig genesisConfig,
+      BlockHeader targetBlockHeader) {
+    return MinimalProtocolSchedule.create(
+            targetBlockHeader,
+            genesisConfig,
+            evmConfiguration,
+            new BadBlockManager(),
+            noOpMetricsSystem);
+
+  }
+
+  private static ProtocolSchedule constructFromGenesisConfig(
+      final GenesisConfig genesisConfig) {
+    // Build the mainnet protocol schedule based on the genesis config.
+    return
+        MainnetProtocolSchedule.fromConfig(
+            genesisConfig.getConfigOptions(),
+            evmConfiguration,
+            MiningConfiguration.MINING_DISABLED,
+            new BadBlockManager(),
+            false,
+            false,
+            noOpMetricsSystem);
+
+
+  }
   /** Print usage information and exit. */
   private static void printUsageAndExit() {
     System.out.println("Usage: BlockRunner [OPTIONS]");
